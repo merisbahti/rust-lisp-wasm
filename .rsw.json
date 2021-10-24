@@ -1,5 +1,3 @@
 {
-  "crates": [
-    "@rsw/hey"
-  ]
+  "crates": ["rispy"]
 }

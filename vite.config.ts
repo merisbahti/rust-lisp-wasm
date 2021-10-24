@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     reactRefresh(),
     ViteRsw({
-      crates: ["@rsw/hey"],
+      crates: ["rispy"],
     }),
   ],
 });

@@ -1,19 +1,17 @@
 import React, { useEffect } from "react";
 import logo from "./logo.svg";
 import "./App.css";
-import init, { greet } from "@rsw/hey";
+import * as rsw from "rispy";
 
 function App() {
-  useEffect(() => {
-    init();
-  }, []);
-
   const [value, setValue] = React.useState("");
   const [expr, setExpr] = React.useState("");
-  React.useEffect(() => {
-    /*
-     */
-  }, [value]);
+
+  useEffect(() => {
+    rsw.default().then(() => {
+      setExpr(rsw.evaluate_symbolic_string(value));
+    });
+  }, [rsw, value]);
 
   return (
     <div className="App">
@@ -24,8 +22,12 @@ function App() {
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(greet(e.target.value))}
+          onChange={(e) => {
+            setValue(e.target.value);
+            //setExpr(rsw.greet(e.target.value));
+          }}
         />
+        <code>{expr}</code>
         <p>
           Edit <code>App.tsx</code> and save to test HMR updates.
         </p>
