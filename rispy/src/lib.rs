@@ -32,6 +32,6 @@ pub fn evaluate_symbolic_string(expression: String) -> String {
             },
             _ => "non-constant".to_string(),
         },
-        Err(e) => "someerror".to_string(),
+        Err(e) => format!("Error: {}", e).to_string(),
     };
 }

@@ -1,36 +1,40 @@
 import React, { useEffect } from "react";
 import logo from "./logo.svg";
 import "./App.css";
-import * as rsw from "rispy";
+import init, { evaluate_symbolic_string } from "rispy";
 
 function App() {
   const [value, setValue] = React.useState("");
   const [expr, setExpr] = React.useState("");
 
   useEffect(() => {
-    rsw.default().then(() => {
-      setExpr(rsw.evaluate_symbolic_string(value));
+    init().then(() => {
+      setExpr(evaluate_symbolic_string(value));
     });
-  }, [rsw, value]);
+  }, [init, value]);
 
   return (
     <div className="App">
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
-        <p>Hello WebAssembly!</p>
-        <p>Vite + Rust + React</p>
         <input
-          type="text"
+          type="textbox"
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
-            //setExpr(rsw.greet(e.target.value));
           }}
         />
-        <code>{expr}</code>
-        <p>
-          Edit <code>App.tsx</code> and save to test HMR updates.
-        </p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            marginTop: "8px",
+            gap: "8px",
+          }}
+        >
+          <div>result:</div>
+          <code>{expr}</code>
+        </div>
       </header>
     </div>
   );
