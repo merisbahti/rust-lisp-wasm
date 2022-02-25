@@ -3,6 +3,8 @@ extern crate nom;
 extern crate wasm_bindgen;
 
 mod eval;
+mod expr;
+mod parse;
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
 
@@ -26,11 +28,8 @@ pub fn evaluate_symbolic_string(expression: String) -> String {
     let result = eval::eval_from_str(&expression.to_string());
     return match result {
         Ok(a) => match a {
-            eval::Expr::Constant(cons) => match cons {
-                eval::Atom::Num(nr) => (nr).to_string(),
-                _ => "non-number constant".to_string(),
-            },
-            _ => "non-constant".to_string(),
+            expr::Expr::Num(nr) => (nr).to_string(),
+            _ => "non-number constant".to_string(),
         },
         Err(e) => format!("Error: {}", e).to_string(),
     };
