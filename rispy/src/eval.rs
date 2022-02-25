@@ -1,16 +1,27 @@
 use crate::expr::Expr;
 use crate::parse::parse;
+use crate::std_env::get_std_lib;
+use crate::std_env::Env;
 
-fn eval_expression(e: &Expr) -> Result<Expr, String> {
+fn eval(e: &Expr) -> Result<Expr, String> {
+    eval_with_env(e, get_std_lib())
+}
+
+fn eval_with_env(e: &Expr, env: Env) -> Result<Expr, String> {
     match e {
         Expr::Keyword(kw) => kw
             .parse::<u8>()
             .map(|x| Expr::Num(x as f64))
             .or(kw.parse::<f64>().map(|x| Expr::Num(x)))
             .or(match kw.as_str() {
-                "true" => Ok(Expr::Boolean(true)),
-                "false" => Ok(Expr::Boolean(false)),
-                _ => Err(format!("Undefined variable: {kw}")),
+                key => match env.get(key) {
+                    Some(Expr::Boolean(bool)) => Ok(Expr::Boolean(*bool)),
+                    Some(Expr::Keyword(s)) => Ok(Expr::Keyword(s.to_string())),
+                    Some(Expr::Num(s)) => Ok(Expr::Num(*s)),
+                    Some(Expr::List(s)) => Ok(Expr::List(s.to_vec())),
+                    Some(Expr::Quote(s)) => Ok(Expr::Quote(s.to_vec())),
+                    None => Err(format!("Undefined variable: {kw}")),
+                },
             }),
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
         Expr::Boolean(v) => Result::Ok(Expr::Boolean(*v)),
@@ -28,7 +39,7 @@ fn collect_numbers<'a>(exprs: &'a [Expr]) -> Result<Vec<f64>, String> {
     exprs
         .into_iter()
         .fold(starting, |acc, unevaled_expr| match acc {
-            Ok(mut results_vec) => match eval_expression(unevaled_expr) {
+            Ok(mut results_vec) => match eval(unevaled_expr) {
                 Ok(Expr::Num(n)) => {
                     results_vec.push(n);
                     Ok(results_vec)
@@ -49,68 +60,50 @@ fn apply_proc<'a>(name: &str, args: &[Expr]) -> Result<Expr, String> {
 
 #[test]
 fn test_eval_primitives() {
+    assert_eq!(eval(&Expr::Boolean(false)), Ok(Expr::Boolean(false)));
+    assert_eq!(eval(&Expr::Boolean(true)), Ok(Expr::Boolean(true)));
     assert_eq!(
-        eval_expression(&Expr::Boolean(false)),
+        eval(&Expr::Keyword("false".to_string())),
         Ok(Expr::Boolean(false))
     );
     assert_eq!(
-        eval_expression(&Expr::Boolean(true)),
+        eval(&Expr::Keyword("true".to_string())),
         Ok(Expr::Boolean(true))
     );
+    assert_eq!(eval(&Expr::Keyword("15".to_string())), Ok(Expr::Num(15.0)));
+    assert_eq!(eval(&Expr::Keyword("0".to_string())), Ok(Expr::Num(0.0)));
     assert_eq!(
-        eval_expression(&Expr::Keyword("false".to_string())),
-        Ok(Expr::Boolean(false))
-    );
-    assert_eq!(
-        eval_expression(&Expr::Keyword("true".to_string())),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        eval_expression(&Expr::Keyword("15".to_string())),
+        eval(&Expr::Keyword("15.0".to_string())),
         Ok(Expr::Num(15.0))
     );
     assert_eq!(
-        eval_expression(&Expr::Keyword("0".to_string())),
-        Ok(Expr::Num(0.0))
-    );
-    assert_eq!(
-        eval_expression(&Expr::Keyword("15.0".to_string())),
+        eval(&Expr::Keyword("00015.0".to_string())),
         Ok(Expr::Num(15.0))
     );
     assert_eq!(
-        eval_expression(&Expr::Keyword("00015.0".to_string())),
-        Ok(Expr::Num(15.0))
-    );
-    assert_eq!(
-        eval_expression(&Expr::Keyword("-00015.0".to_string())),
+        eval(&Expr::Keyword("-00015.0".to_string())),
         Ok(Expr::Num(-15.0))
     );
     assert_eq!(
-        eval_expression(&Expr::Keyword("-0.5".to_string())),
+        eval(&Expr::Keyword("-0.5".to_string())),
         Ok(Expr::Num(-0.5))
     );
     assert_eq!(
-        eval_expression(&Expr::Keyword("a".to_string())),
+        eval(&Expr::Keyword("a".to_string())),
         Err("Undefined variable: a".to_string())
     );
+    assert_eq!(eval(&Expr::Boolean(true)), Ok(Expr::Boolean(true)));
+    assert_eq!(eval(&Expr::Boolean(false)), Ok(Expr::Boolean(false)));
+    assert_eq!(eval(&Expr::Num(15.0)), Ok(Expr::Num(15.)));
+    assert_eq!(eval(&Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
     assert_eq!(
-        eval_expression(&Expr::Boolean(true)),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        eval_expression(&Expr::Boolean(false)),
-        Ok(Expr::Boolean(false))
-    );
-    assert_eq!(eval_expression(&Expr::Num(15.0)), Ok(Expr::Num(15.)));
-    assert_eq!(eval_expression(&Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
-    assert_eq!(
-        eval_expression(&Expr::Quote(vec![Expr::Keyword("true".to_string())])),
+        eval(&Expr::Quote(vec![Expr::Keyword("true".to_string())])),
         Ok(Expr::List(vec![Expr::Keyword("true".to_string())]))
     );
 }
 
 pub fn eval_from_str(src: &str) -> Result<Expr, String> {
-    parse(src).and_then(|exp| eval_expression(&exp).map_err(|e| e.to_string()))
+    parse(src).and_then(|exp| eval(&exp).map_err(|e| e.to_string()))
 }
 
 #[test]

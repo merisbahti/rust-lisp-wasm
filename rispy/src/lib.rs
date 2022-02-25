@@ -5,6 +5,7 @@ extern crate wasm_bindgen;
 mod eval;
 mod expr;
 mod parse;
+mod std_env;
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
 
