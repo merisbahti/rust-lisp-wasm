@@ -3,11 +3,11 @@ use crate::parse::parse;
 use crate::std_env::get_std_lib;
 use crate::std_env::Env;
 
-fn eval(e: &Expr) -> Result<Expr, String> {
+pub fn eval(e: &Expr) -> Result<Expr, String> {
     eval_with_env(e, get_std_lib())
 }
 
-fn eval_with_env(e: &Expr, env: Env) -> Result<Expr, String> {
+pub fn eval_with_env(e: &Expr, env: Env) -> Result<Expr, String> {
     match e {
         Expr::Keyword(kw) => kw
             .parse::<u8>()
@@ -20,41 +20,22 @@ fn eval_with_env(e: &Expr, env: Env) -> Result<Expr, String> {
                     Some(Expr::Num(s)) => Ok(Expr::Num(*s)),
                     Some(Expr::List(s)) => Ok(Expr::List(s.to_vec())),
                     Some(Expr::Quote(s)) => Ok(Expr::Quote(s.to_vec())),
+                    Some(Expr::Proc(_)) => Err(format!("Cannot eval proc: {kw}")),
                     None => Err(format!("Undefined variable: {kw}")),
                 },
             }),
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
         Expr::Boolean(v) => Result::Ok(Expr::Boolean(*v)),
         Expr::Num(n) => Result::Ok(Expr::Num(*n)),
+        Expr::Proc(_) => Result::Err("Can not eval proc.".to_string()),
         Expr::List(xs) => match xs.as_slice() {
-            [Expr::Keyword(proc_name), args @ ..] => apply_proc(proc_name, args),
+            [Expr::Keyword(proc_name), args @ ..] => match env.get(proc_name.as_str()) {
+                Some(Expr::Proc(proc)) => proc(args),
+                Some(expr) => Err(format!("Cannot eval {expr}")),
+                None => Err(format!("Cannot find {proc_name}")),
+            },
             _ => Result::Err("Cannot evaluate empty list".to_string()),
         },
-    }
-}
-
-fn collect_numbers<'a>(exprs: &'a [Expr]) -> Result<Vec<f64>, String> {
-    let empty_vec: Vec<f64> = Vec::new();
-    let starting: Result<Vec<f64>, String> = Ok(empty_vec);
-    exprs
-        .into_iter()
-        .fold(starting, |acc, unevaled_expr| match acc {
-            Ok(mut results_vec) => match eval(unevaled_expr) {
-                Ok(Expr::Num(n)) => {
-                    results_vec.push(n);
-                    Ok(results_vec)
-                }
-                thing => Err(format!("Expected number, but found {thing:?}")),
-            },
-            e => e,
-        })
-}
-
-fn apply_proc<'a>(name: &str, args: &[Expr]) -> Result<Expr, String> {
-    match name {
-        "add" => collect_numbers(args)
-            .and_then(|xs| Ok(Expr::Num(xs.into_iter().fold(0., |a, b| a + b)))),
-        _ => Err("haha".to_string()),
     }
 }
 
