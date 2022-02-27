@@ -7,8 +7,9 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
         Expr::Keyword(kw) => kw
             .parse::<u8>()
-            .map(|x| Expr::Num(x as f64))
-            .or(kw.parse::<f64>().map(|x| Expr::Num(x)))
+            .map(|x| x as f64)
+            .or(kw.parse::<f64>())
+            .map(|x| Expr::Num(x))
             .or(match env.get(kw.as_str()) {
                 Some(e) => Ok(e.clone()),
                 None => Err(format!("Undefined variable: {kw}")),
