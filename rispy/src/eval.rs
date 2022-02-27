@@ -4,25 +4,23 @@ use crate::std_env::get_std_lib;
 use crate::std_env::Env;
 
 pub fn eval(e: &Expr) -> Result<Expr, String> {
-    eval_with_env(e, get_std_lib())
+    eval_with_env(e, &mut get_std_lib())
 }
 
-pub fn eval_with_env(e: &Expr, env: Env) -> Result<Expr, String> {
+pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
         Expr::Keyword(kw) => kw
             .parse::<u8>()
             .map(|x| Expr::Num(x as f64))
             .or(kw.parse::<f64>().map(|x| Expr::Num(x)))
-            .or(match kw.as_str() {
-                key => match env.get(key) {
-                    Some(Expr::Boolean(bool)) => Ok(Expr::Boolean(*bool)),
-                    Some(Expr::Keyword(s)) => Ok(Expr::Keyword(s.to_string())),
-                    Some(Expr::Num(s)) => Ok(Expr::Num(*s)),
-                    Some(Expr::List(s)) => Ok(Expr::List(s.to_vec())),
-                    Some(Expr::Quote(s)) => Ok(Expr::Quote(s.to_vec())),
-                    Some(Expr::Proc(_)) => Err(format!("Cannot eval proc: {kw}")),
-                    None => Err(format!("Undefined variable: {kw}")),
-                },
+            .or(match env.get(kw.as_str()) {
+                Some(Expr::Boolean(bool)) => Ok(Expr::Boolean(*bool)),
+                Some(Expr::Keyword(s)) => Ok(Expr::Keyword(s.to_string())),
+                Some(Expr::Num(s)) => Ok(Expr::Num(*s)),
+                Some(Expr::List(s)) => Ok(Expr::List(s.to_vec())),
+                Some(Expr::Quote(s)) => Ok(Expr::Quote(s.to_vec())),
+                Some(Expr::Proc(_)) => Err(format!("Cannot eval proc: {kw}")),
+                None => Err(format!("Undefined variable: {kw}")),
             }),
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
         Expr::Boolean(v) => Result::Ok(Expr::Boolean(*v)),
