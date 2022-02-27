@@ -99,6 +99,53 @@ pub fn eval_from_str(src: &str) -> Result<Expr, String> {
 }
 
 #[test]
+fn test_scoping() {
+    assert_eq!(
+        eval_from_str(
+            "
+            (let a 10)
+            (let b 20)
+            (let f (fn (a) 
+             (let b 500)
+             (add a b)
+            ))
+            (f 1000)"
+        ),
+        Ok(Expr::Num(1500.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+            (let a 10)
+            (let b 20)
+            (let f (fn (a) 
+             (let b 500)
+             (add a b)
+            ))
+            (f 1000)
+            a
+            "
+        ),
+        Ok(Expr::Num(10.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+            (let a 10)
+            (let b 20)
+            (let f (fn (a) 
+             (let b 500)
+             (add a b)
+            ))
+            (f 1000)
+            a
+            b
+            "
+        ),
+        Ok(Expr::Num(20.))
+    )
+}
+#[test]
 fn test_eval_fns() {
     assert_eq!(eval_from_str("(add 1 2)"), Ok(Expr::Num(3.)));
     assert_eq!(eval_from_str("(add 1 2 3 4)"), Ok(Expr::Num(10.)));
