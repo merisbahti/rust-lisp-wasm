@@ -1,5 +1,5 @@
 use crate::expr::Expr;
-use crate::parse::parse_program;
+use crate::parse::parse;
 use crate::std_env::get_std_lib;
 use crate::std_env::Env;
 
@@ -87,7 +87,7 @@ pub fn eval_exprs(exprs: &[Expr], env: &mut Env) -> Result<Expr, String> {
 }
 
 pub fn eval_from_str(src: &str) -> Result<Expr, String> {
-    parse_program(src)
+    parse(src)
         .map_err(|e| e.to_string())
         .and_then(|exps| eval_exprs(&exps, &mut get_std_lib()))
 }
