@@ -17,8 +17,7 @@ function App() {
     <div className="App">
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
-        <input
-          type="textbox"
+        <textarea
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
