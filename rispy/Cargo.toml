@@ -2,7 +2,7 @@
 name = "rispy"
 version = "0.1.0"
 authors = ["Nshen <nshen121@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
