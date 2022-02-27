@@ -14,12 +14,7 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
             .map(|x| Expr::Num(x as f64))
             .or(kw.parse::<f64>().map(|x| Expr::Num(x)))
             .or(match env.get(kw.as_str()) {
-                Some(Expr::Boolean(bool)) => Ok(Expr::Boolean(*bool)),
-                Some(Expr::Keyword(s)) => Ok(Expr::Keyword(s.to_string())),
-                Some(Expr::Num(s)) => Ok(Expr::Num(*s)),
-                Some(Expr::List(s)) => Ok(Expr::List(s.to_vec())),
-                Some(Expr::Quote(s)) => Ok(Expr::Quote(s.to_vec())),
-                Some(Expr::Proc(_)) => Err(format!("Cannot eval proc: {kw}")),
+                Some(e) => Ok(e.clone()),
                 None => Err(format!("Undefined variable: {kw}")),
             }),
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
