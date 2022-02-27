@@ -1,11 +1,7 @@
 use crate::expr::Expr;
-use crate::parse::parse;
+use crate::parse::parse_program;
 use crate::std_env::get_std_lib;
 use crate::std_env::Env;
-
-pub fn eval(e: &Expr) -> Result<Expr, String> {
-    eval_with_env(e, get_std_lib()).map(|(expr, _)| expr)
-}
 
 pub fn eval_with_env(e: &Expr, env: Env) -> Result<(Expr, Env), String> {
     match e {
@@ -37,6 +33,9 @@ pub fn eval_with_env(e: &Expr, env: Env) -> Result<(Expr, Env), String> {
 
 #[test]
 fn test_eval_primitives() {
+    pub fn eval(e: &Expr) -> Result<Expr, String> {
+        eval_with_env(e, get_std_lib()).map(|(expr, _)| expr)
+    }
     assert_eq!(eval(&Expr::Boolean(false)), Ok(Expr::Boolean(false)));
     assert_eq!(eval(&Expr::Boolean(true)), Ok(Expr::Boolean(true)));
     assert_eq!(
@@ -80,7 +79,17 @@ fn test_eval_primitives() {
 }
 
 pub fn eval_from_str(src: &str) -> Result<Expr, String> {
-    parse(src).and_then(|exp| eval(&exp).map_err(|e| e.to_string()))
+    parse_program(src)
+        .map_err(|e| e.to_string())
+        .and_then(|(_, exps)| {
+            let starting = Ok((Expr::List(vec![]), get_std_lib()));
+            exps.into_iter()
+                .fold(starting, |acc, curr| match acc {
+                    Ok((_, new_env)) => eval_with_env(&curr, new_env),
+                    e => e,
+                })
+                .map(|(e, _)| e)
+        })
 }
 
 #[test]
@@ -90,5 +99,23 @@ fn test_eval_fns() {
     assert_eq!(
         eval_from_str("()"),
         Err("Cannot evaluate empty list".to_string())
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+            (let a 5)
+            a 
+        "
+        ),
+        Ok(Expr::Num(5.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+            (let a 5)
+            (add a a)
+        "
+        ),
+        Ok(Expr::Num(10.))
     );
 }

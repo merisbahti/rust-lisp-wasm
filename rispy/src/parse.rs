@@ -42,6 +42,10 @@ fn parse_expr<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
     )(i)
 }
 
+pub fn parse_program<'a>(i: &'a str) -> IResult<&'a str, Vec<Expr>, VerboseError<&'a str>> {
+    many0(delimited(multispace0, parse_expr, multispace0))(i)
+}
+
 pub fn parse<'a>(input: &'a str) -> Result<Expr, String> {
     parse_expr(input)
         .map_err(|e| {
@@ -104,5 +108,4 @@ fn test_parse_lists() {
             Expr::Keyword("2".to_string())
         ]))
     );
-    //assert_eq!(parse("(123)"), Ok(Expr::Keyword("5".to_string())));
 }
