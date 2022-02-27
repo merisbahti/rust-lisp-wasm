@@ -169,6 +169,14 @@ fn test_eval_fns() {
     assert_eq!(
         eval_from_str(
             "
+            (sub 3 2)
+        "
+        ),
+        Ok(Expr::Num(1.0))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
             (let a 5)
             (let f (fn (x) (add x a)))
             (f a 10)
@@ -211,5 +219,21 @@ fn test_eval_fns() {
         "
         ),
         Ok(Expr::Num(100.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+(let f
+    (fn (x iters)
+        (cond 
+            ((less iters 0) x) 
+            (true (f (add x x) (sub iters 1)))
+        )
     )
+)
+(f 1 10)
+        "
+        ),
+        Ok(Expr::Num(2048.))
+    );
 }

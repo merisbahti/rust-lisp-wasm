@@ -9,19 +9,19 @@ pub type Env = HashMap<String, Expr>;
 fn collect_numbers<'a>(exprs: &'a [Expr], env: &Env) -> Result<Vec<f64>, String> {
     let empty_vec: Vec<f64> = Vec::new();
     let starting: Result<Vec<f64>, String> = Ok(empty_vec);
-    exprs
-        .into_iter()
-        .fold(starting, |acc, unevaled_expr| match acc {
-            Ok(mut results_vec) => match eval_with_env(unevaled_expr, &mut env.clone()) {
+    exprs.into_iter().fold(starting, |acc, unevaled_expr| {
+        acc.and_then(
+            |results_vec| match eval_with_env(unevaled_expr, &mut env.clone()) {
                 Ok(Expr::Num(n)) => {
-                    results_vec.push(n);
-                    Ok(results_vec)
+                    let mut clone = results_vec.clone();
+                    clone.push(n);
+                    Ok(clone)
                 }
                 Ok(thing) => Err(format!("Expected number, but found {thing:?}")),
                 Err(e) => Err(e),
             },
-            e => e,
-        })
+        )
+    })
 }
 
 fn collect_keywords(exprs: &[Expr]) -> Result<Vec<String>, String> {
@@ -92,6 +92,15 @@ pub fn get_std_lib() -> Env {
             Expr::Proc(Arc::new(|exprs, env| {
                 collect_numbers(exprs, env)
                     .map(|xs| Expr::Num(xs.into_iter().fold(0., |a, b| a + b)))
+            })),
+        ),
+        (
+            "sub".to_string(),
+            Expr::Proc(Arc::new(|exprs, env| {
+                collect_numbers(exprs, env).and_then(|xs| match xs.as_slice() {
+                    [left, right] => Ok(Expr::Num(left - right)),
+                    _ => Err("Sorry sub take only 2 arguments".to_string()),
+                })
             })),
         ),
         (
