@@ -12,7 +12,7 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Vec<Expr>),
-    Proc(Arc<dyn Fn(&[Expr], &Env) -> Result<(Expr, Env), String>>),
+    Proc(Arc<dyn Fn(&[Expr], &mut Env) -> Result<Expr, String>>),
 }
 
 impl Display for Expr {
