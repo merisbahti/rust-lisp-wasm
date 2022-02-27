@@ -3,6 +3,7 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
 use nom::lib::std::fmt::Formatter;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum Expr {
@@ -11,7 +12,7 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Vec<Expr>),
-    Proc(Box<fn(&[Expr], Env) -> Result<(Expr, Env), String>>),
+    Proc(Arc<dyn Fn(&[Expr], &Env) -> Result<(Expr, Env), String>>),
 }
 
 impl Display for Expr {
