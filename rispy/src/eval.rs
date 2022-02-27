@@ -5,23 +5,12 @@ use crate::std_env::Env;
 
 pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
-        Expr::Keyword(kw) => kw
-            .parse::<u8>()
-            .map(|x| x as f64)
-            .or(kw.parse::<f64>())
-            .map(|x| Expr::Num(x))
-            .or(match env.get(kw.as_str()) {
-                Some(e) => Ok(e.clone()),
-                None => Err(format!("Undefined variable: {kw}")),
-            }),
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
-        Expr::Boolean(v) => Result::Ok(Expr::Boolean(*v)),
-        Expr::Num(n) => Result::Ok(Expr::Num(*n)),
         Expr::Proc(_) => Result::Err("Can not eval proc.".to_string()),
         Expr::List(xs) => match xs.as_slice() {
             [Expr::Keyword(proc_name), args @ ..] => {
-                let cloned = env.clone();
-                let gotten = cloned.get(proc_name.as_str());
+                let local_env = env.clone();
+                let gotten = local_env.get(proc_name.as_str());
                 match gotten {
                     Some(Expr::Proc(proc)) => proc(args, env),
                     Some(expr) => Err(format!("Cannot eval {expr}")),
@@ -30,6 +19,16 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
             }
             _ => Result::Err("Cannot evaluate empty list".to_string()),
         },
+        Expr::Keyword(kw) => Err("")
+            .or(kw.parse::<u8>())
+            .map(|x| x as f64)
+            .or(kw.parse::<f64>())
+            .map(|x| Expr::Num(x))
+            .or(match env.get(kw.as_str()) {
+                Some(e) => Ok(e.clone()),
+                None => Err(format!("Undefined variable: {kw}")),
+            }),
+        e => Result::Ok(e.clone()),
     }
 }
 
@@ -90,7 +89,7 @@ pub fn eval_exprs(exprs: &[Expr], env: &mut Env) -> Result<Expr, String> {
 pub fn eval_from_str(src: &str) -> Result<Expr, String> {
     parse_program(src)
         .map_err(|e| e.to_string())
-        .and_then(|(_, exps)| eval_exprs(&exps, &mut get_std_lib()))
+        .and_then(|exps| eval_exprs(&exps, &mut get_std_lib()))
 }
 
 #[test]

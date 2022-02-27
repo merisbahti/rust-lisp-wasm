@@ -42,8 +42,13 @@ fn parse_expr<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
     )(i)
 }
 
-pub fn parse_program<'a>(i: &'a str) -> IResult<&'a str, Vec<Expr>, VerboseError<&'a str>> {
+pub fn parse_program<'a>(i: &'a str) -> Result<Vec<Expr>, String> {
     many0(delimited(multispace0, parse_expr, multispace0))(i)
+        .map_err(|e| format!("{e:?}"))
+        .and_then(|(remaining, exp)| match remaining {
+            "" => Ok(exp),
+            remainder => Err(format!("Unexpected end of input: {remainder}")),
+        })
 }
 
 pub fn parse<'a>(input: &'a str) -> Result<Expr, String> {
