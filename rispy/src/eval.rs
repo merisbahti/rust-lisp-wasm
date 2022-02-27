@@ -35,47 +35,41 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
 
 #[test]
 fn test_eval_primitives() {
-    pub fn eval(e: &Expr) -> Result<Expr, String> {
-        eval_with_env(e, &mut get_std_lib())
+    pub fn eval(e: Expr) -> Result<Expr, String> {
+        eval_with_env(&e, &mut get_std_lib())
     }
-    assert_eq!(eval(&Expr::Boolean(false)), Ok(Expr::Boolean(false)));
-    assert_eq!(eval(&Expr::Boolean(true)), Ok(Expr::Boolean(true)));
+    assert_eq!(eval(Expr::Boolean(false)), Ok(Expr::Boolean(false)));
+    assert_eq!(eval(Expr::Boolean(true)), Ok(Expr::Boolean(true)));
     assert_eq!(
-        eval(&Expr::Keyword("false".to_string())),
+        eval(Expr::Keyword("false".to_string())),
         Ok(Expr::Boolean(false))
     );
     assert_eq!(
-        eval(&Expr::Keyword("true".to_string())),
+        eval(Expr::Keyword("true".to_string())),
         Ok(Expr::Boolean(true))
     );
-    assert_eq!(eval(&Expr::Keyword("15".to_string())), Ok(Expr::Num(15.0)));
-    assert_eq!(eval(&Expr::Keyword("0".to_string())), Ok(Expr::Num(0.0)));
+    assert_eq!(eval(Expr::Keyword("15".to_string())), Ok(Expr::Num(15.0)));
+    assert_eq!(eval(Expr::Keyword("0".to_string())), Ok(Expr::Num(0.0)));
+    assert_eq!(eval(Expr::Keyword("15.0".to_string())), Ok(Expr::Num(15.0)));
     assert_eq!(
-        eval(&Expr::Keyword("15.0".to_string())),
+        eval(Expr::Keyword("00015.0".to_string())),
         Ok(Expr::Num(15.0))
     );
     assert_eq!(
-        eval(&Expr::Keyword("00015.0".to_string())),
-        Ok(Expr::Num(15.0))
-    );
-    assert_eq!(
-        eval(&Expr::Keyword("-00015.0".to_string())),
+        eval(Expr::Keyword("-00015.0".to_string())),
         Ok(Expr::Num(-15.0))
     );
+    assert_eq!(eval(Expr::Keyword("-0.5".to_string())), Ok(Expr::Num(-0.5)));
     assert_eq!(
-        eval(&Expr::Keyword("-0.5".to_string())),
-        Ok(Expr::Num(-0.5))
-    );
-    assert_eq!(
-        eval(&Expr::Keyword("a".to_string())),
+        eval(Expr::Keyword("a".to_string())),
         Err("Undefined variable: a".to_string())
     );
-    assert_eq!(eval(&Expr::Boolean(true)), Ok(Expr::Boolean(true)));
-    assert_eq!(eval(&Expr::Boolean(false)), Ok(Expr::Boolean(false)));
-    assert_eq!(eval(&Expr::Num(15.0)), Ok(Expr::Num(15.)));
-    assert_eq!(eval(&Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
+    assert_eq!(eval(Expr::Boolean(true)), Ok(Expr::Boolean(true)));
+    assert_eq!(eval(Expr::Boolean(false)), Ok(Expr::Boolean(false)));
+    assert_eq!(eval(Expr::Num(15.0)), Ok(Expr::Num(15.)));
+    assert_eq!(eval(Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
     assert_eq!(
-        eval(&Expr::Quote(vec![Expr::Keyword("true".to_string())])),
+        eval(Expr::Quote(vec![Expr::Keyword("true".to_string())])),
         Ok(Expr::List(vec![Expr::Keyword("true".to_string())]))
     );
 }
