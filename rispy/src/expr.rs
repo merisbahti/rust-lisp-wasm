@@ -19,26 +19,41 @@ impl Display for Expr {
         formatter: &mut std::fmt::Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            Expr::List(xs) => write!(formatter, "List()"),
-            Expr::Num(x) => write!(formatter, "Num({x})"),
-            Expr::Keyword(x) => write!(formatter, "Keyword()"),
-            Expr::Boolean(x) => write!(formatter, "Boolean()"),
-            Expr::Quote(xs) => write!(formatter, "Quote(...)"),
-            Expr::Proc(xs) => write!(formatter, "Proc(..)"),
+            Expr::List(x) => write!(formatter, "List({x:?})"),
+            Expr::Num(x) => write!(formatter, "Num({x:?})"),
+            Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
+            Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
+            Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
+            Expr::Proc(_) => write!(formatter, "Proc(...)"),
         }
     }
 }
 
+#[test]
+fn test_display() {
+    let bool_expr = Expr::Boolean(true);
+    assert_eq!(format!("{bool_expr}"), "Boolean(true)");
+
+    let bool_expr_2 = Expr::Boolean(false);
+    assert_eq!(format!("{bool_expr_2}"), "Boolean(false)");
+
+    let empty_list = Expr::List(vec![]);
+    assert_eq!(format!("{empty_list}"), "List([])");
+
+    let list_with_values = Expr::List(vec![
+        Expr::Boolean(false),
+        Expr::Num(5.0),
+        Expr::List(vec![Expr::Keyword("hello".to_string())]),
+    ]);
+    assert_eq!(
+        format!("{list_with_values}"),
+        "List([Boolean(false), Num(5.0), List([Keyword(\"hello\")])])"
+    );
+}
+
 impl Debug for Expr {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), Error> {
-        match self {
-            Expr::List(xs) => write!(formatter, "List()"),
-            Expr::Num(x) => write!(formatter, "Num({x})"),
-            Expr::Keyword(x) => write!(formatter, "Keyword()"),
-            Expr::Boolean(x) => write!(formatter, "Boolean()"),
-            Expr::Quote(xs) => write!(formatter, "Quote(...)"),
-            Expr::Proc(xs) => write!(formatter, "Proc(..)"),
-        }
+        write!(formatter, "{self}")
     }
 }
 
