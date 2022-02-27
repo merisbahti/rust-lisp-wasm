@@ -4,29 +4,32 @@ use crate::std_env::get_std_lib;
 use crate::std_env::Env;
 
 pub fn eval(e: &Expr) -> Result<Expr, String> {
-    eval_with_env(e, &mut get_std_lib())
+    eval_with_env(e, get_std_lib()).map(|(expr, _)| expr)
 }
 
-pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
+pub fn eval_with_env(e: &Expr, env: Env) -> Result<(Expr, Env), String> {
     match e {
         Expr::Keyword(kw) => kw
             .parse::<u8>()
-            .map(|x| Expr::Num(x as f64))
-            .or(kw.parse::<f64>().map(|x| Expr::Num(x)))
+            .map(|x| (Expr::Num(x as f64), env.clone()))
+            .or(kw.parse::<f64>().map(|x| (Expr::Num(x), env.clone())))
             .or(match env.get(kw.as_str()) {
-                Some(e) => Ok(e.clone()),
+                Some(e) => Ok((e.clone(), env)),
                 None => Err(format!("Undefined variable: {kw}")),
             }),
-        Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
-        Expr::Boolean(v) => Result::Ok(Expr::Boolean(*v)),
-        Expr::Num(n) => Result::Ok(Expr::Num(*n)),
+        Expr::Quote(exprs) => Result::Ok((Expr::List(exprs.to_vec()), env)),
+        Expr::Boolean(v) => Result::Ok((Expr::Boolean(*v), env)),
+        Expr::Num(n) => Result::Ok((Expr::Num(*n), env)),
         Expr::Proc(_) => Result::Err("Can not eval proc.".to_string()),
         Expr::List(xs) => match xs.as_slice() {
-            [Expr::Keyword(proc_name), args @ ..] => match env.get(proc_name.as_str()) {
-                Some(Expr::Proc(proc)) => proc(args),
-                Some(expr) => Err(format!("Cannot eval {expr}")),
-                None => Err(format!("Cannot find {proc_name}")),
-            },
+            [Expr::Keyword(proc_name), args @ ..] => {
+                let gotten = env.get(proc_name.as_str());
+                match gotten {
+                    Some(Expr::Proc(proc)) => proc(args, env.clone()),
+                    Some(expr) => Err(format!("Cannot eval {expr}")),
+                    None => Err(format!("Cannot find {proc_name}")),
+                }
+            }
             _ => Result::Err("Cannot evaluate empty list".to_string()),
         },
     }

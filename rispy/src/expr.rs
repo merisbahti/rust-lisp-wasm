@@ -1,3 +1,4 @@
+use crate::std_env::Env;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
@@ -10,7 +11,7 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Vec<Expr>),
-    Proc(Box<fn(&[Expr]) -> Result<Expr, String>>),
+    Proc(Box<fn(&[Expr], Env) -> Result<(Expr, Env), String>>),
 }
 
 impl Display for Expr {

@@ -1,8 +1,9 @@
 use crate::eval::eval;
+use crate::eval::eval_with_env;
 use crate::expr::Expr;
 use std::collections::HashMap;
 
-pub type Env<'a> = HashMap<&'a str, Expr>;
+pub type Env = HashMap<String, Expr>;
 
 fn collect_numbers<'a>(exprs: &'a [Expr]) -> Result<Vec<f64>, String> {
     let empty_vec: Vec<f64> = Vec::new();
@@ -21,15 +22,28 @@ fn collect_numbers<'a>(exprs: &'a [Expr]) -> Result<Vec<f64>, String> {
         })
 }
 
-pub fn get_std_lib<'a>() -> Env<'a> {
+pub fn get_std_lib() -> Env {
     HashMap::from([
-        ("true", Expr::Boolean(true)),
-        ("false", Expr::Boolean(false)),
+        ("true".to_string(), Expr::Boolean(true)),
+        ("false".to_string(), Expr::Boolean(false)),
         (
-            "add",
-            Expr::Proc(Box::new(|exprs| {
+            "add".to_string(),
+            Expr::Proc(Box::new(|exprs, env| {
                 collect_numbers(exprs)
-                    .and_then(|xs| Ok(Expr::Num(xs.into_iter().fold(0., |a, b| a + b))))
+                    .and_then(|xs| Ok((Expr::Num(xs.into_iter().fold(0., |a, b| a + b)), env)))
+            })),
+        ),
+        (
+            "let".to_string(),
+            Expr::Proc(Box::new(|exprs, env| {
+                let mut copied_env = env.clone();
+                match exprs {
+                    [Expr::Keyword(name), value] => {
+                        copied_env.insert(name.to_string(), value.clone());
+                        eval_with_env(value, env).map(|(expr, _)| (expr, copied_env))
+                    }
+                    _ => Err("Let takes 2 arguments, a keyword and an expression".to_string()),
+                }
             })),
         ),
     ])
