@@ -8,9 +8,11 @@ function App() {
   const [expr, setExpr] = React.useState("");
 
   useEffect(() => {
-    init().then(() => {
-      setExpr(evaluate_symbolic_string(value));
-    });
+    init()
+      .then(() => {
+        setExpr(evaluate_symbolic_string(value));
+      })
+      .catch((e) => setExpr(`An error occured: ${e.message}`));
   }, [init, value]);
 
   return (

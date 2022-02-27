@@ -68,9 +68,7 @@ pub fn get_std_lib() -> Env {
                             _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
                         })
                     });
-                println!("got these pairs: {cond_pairs:?}");
                 let winner: Result<Expr, String> = cond_pairs.and_then(|res| {
-                    println!("checking: {res:?}");
                     res.into_iter()
                         .fold(None, |acc, (cond, cons)| {
                             acc.or_else(|| match eval_with_env(&cond, env) {

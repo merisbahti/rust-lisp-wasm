@@ -50,7 +50,6 @@ pub fn parse<'a>(input: &'a str) -> Result<Expr, String> {
     parse_expr(input)
         .map_err(|e| {
             let err = format!("{:#?}", e);
-            print!("{err}");
             err
         })
         .and_then(|(_, exp)| Ok(exp))
