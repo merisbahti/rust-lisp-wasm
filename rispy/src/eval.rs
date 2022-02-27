@@ -153,5 +153,20 @@ fn test_eval_fns() {
         "
         ),
         Ok(Expr::Num(5.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "(let f
+                (fn (x)
+                    (cond 
+                        ((less x 100) (f (add 1 x))) 
+                        (true x)
+                    )
+                )
+            )
+            (f 0)
+        "
+        ),
+        Ok(Expr::Num(100.))
     )
 }

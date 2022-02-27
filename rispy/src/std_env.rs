@@ -43,13 +43,61 @@ pub fn get_std_lib() -> Env {
         ("true".to_string(), Expr::Boolean(true)),
         ("false".to_string(), Expr::Boolean(false)),
         (
+            "less".to_string(),
+            Expr::Proc(Arc::new(|exprs, env| {
+                collect_numbers(exprs, env).and_then(|numbers| match numbers.as_slice() {
+                    [lhs, rhs] => Ok((Expr::Boolean(lhs < rhs), env.clone())),
+                    _ => Err("Only 2 arguments to less please".to_string()),
+                })
+            })),
+        ),
+        (
+            "cond".to_string(),
+            Expr::Proc(Arc::new(|cases, env| {
+                let cond_pairs: Result<Vec<(Expr, Expr)>, String> =
+                    cases.into_iter().fold(Ok(vec![]), |acc, curr| {
+                        acc.and_then(|v| match curr {
+                            Expr::List(l) => match l.as_slice() {
+                                [head, butt] => {
+                                    let mut new_acc = v.clone();
+                                    new_acc.push((head.clone(), butt.clone()));
+                                    Ok(new_acc)
+                                }
+                                _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
+                            },
+                            _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
+                        })
+                    });
+                println!("got these pairs: {cond_pairs:?}");
+                let winner: Result<Expr, String> = cond_pairs.and_then(|res| {
+                    println!("checking: {res:?}");
+                    res.into_iter()
+                        .fold(None, |acc, (cond, cons)| {
+                            acc.or_else(|| match eval_with_env(&cond, env) {
+                                Ok((Expr::Boolean(true), _)) => Some(
+                                    eval_with_env(&cons, env).map(|(evaled_cons, _)| evaled_cons),
+                                ),
+                                Ok((Expr::Boolean(false), _)) => None,
+                                Err(e) => Some(Err(e)),
+                                _ => Some(Err(format!(
+                                    "Expected cond to revaluate to boolean, but found: {cond:?}"
+                                ))),
+                            })
+                        })
+                        .unwrap_or(Err("Nothing evaluated to true in cond".to_string()))
+                });
+
+                winner.map(|w| (w, env.clone()))
+            })),
+        ),
+        (
             "add".to_string(),
             Expr::Proc(Arc::new(|exprs, env| {
-                collect_numbers(exprs, env).and_then(|xs| {
-                    Ok((
+                collect_numbers(exprs, env).map(|xs| {
+                    (
                         Expr::Num(xs.into_iter().fold(0., |a, b| a + b)),
                         env.clone(),
-                    ))
+                    )
                 })
             })),
         ),
