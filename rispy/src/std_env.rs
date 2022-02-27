@@ -17,8 +17,8 @@ fn collect_numbers<'a>(exprs: &'a [Expr], env: &Env) -> Result<Vec<f64>, String>
                     results_vec.push(n);
                     Ok(results_vec)
                 }
+                Ok(thing) => Err(format!("Expected number, but found {thing:?}")),
                 Err(e) => Err(e),
-                thing => Err(format!("Expected number, but found {thing:?}")),
             },
             e => e,
         })

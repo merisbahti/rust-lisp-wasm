@@ -28,10 +28,7 @@ extern "C" {
 pub fn evaluate_symbolic_string(expression: String) -> String {
     let result = eval::eval_from_str(&expression.to_string());
     return match result {
-        Ok(a) => match a {
-            expr::Expr::Num(nr) => (nr).to_string(),
-            _ => "non-number constant".to_string(),
-        },
+        Ok(a) => format!("{a}"),
         Err(e) => format!("Error: {}", e).to_string(),
     };
 }
