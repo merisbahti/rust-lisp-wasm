@@ -7,12 +7,15 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
         Expr::List(xs) => match xs.as_slice() {
-            [head, args @ ..] => eval_with_env(head, env).and_then(|evaled| match evaled {
-                Expr::Proc(proc) => proc(args, env),
-                e => Err(format!("Cannot evaluate {e}")),
-            }),
+            [head, args @ ..] => Ok((head, args)),
             _ => Result::Err("Cannot evaluate empty list".to_string()),
-        },
+        }
+        .and_then(|(head, args)| {
+            eval_with_env(head, env).and_then(|evaled| match evaled {
+                Expr::Proc(proc) => proc(args, env),
+                e => Err(format!("Expected proc, but found: {e}")),
+            })
+        }),
         Expr::Keyword(kw) => match env.get(kw.as_str()) {
             Some(e) => Ok(e.clone()),
             None => Err(format!("Undefined variable: {kw}")),
