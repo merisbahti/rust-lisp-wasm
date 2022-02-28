@@ -12,24 +12,24 @@ use nom::{
 
 use crate::expr::Expr;
 
-fn parse_number<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(context("number", double), |nr| Expr::Num(nr))(i)
 }
 
-fn parse_keyword<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(context("keyword", alphanumeric1), |sym_str: &str| {
         Expr::Keyword(sym_str.to_string())
     })(i)
 }
 
-fn parse_list<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("list", delimited(char('('), many0(parse_expr), char(')'))),
         |list| Expr::List(list),
     )(i)
 }
 
-fn parse_quote<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("quote", preceded(tag("'"), parse_list)),
         |exprs| match exprs {
@@ -39,7 +39,7 @@ fn parse_quote<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> 
     )(i)
 }
 
-fn parse_expr<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     delimited(
         multispace0,
         alt((parse_list, parse_number, parse_quote, parse_keyword)),
@@ -47,7 +47,7 @@ fn parse_expr<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
     )(i)
 }
 
-pub fn parse<'a>(i: &'a str) -> Result<Vec<Expr>, String> {
+pub fn parse(i: &str) -> Result<Vec<Expr>, String> {
     many0(delimited(multispace0, parse_expr, multispace0))(i)
         .map_err(|e| format!("{e:?}"))
         .and_then(|(remaining, exp)| match remaining {
@@ -84,7 +84,7 @@ fn test_parse_alphanumerics_fails() {
 
 #[test]
 fn test_parse_lists() {
-    fn ok_list<'a>(strings: Vec<&'a str>) -> Result<Vec<Expr>, String> {
+    fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::List(
             strings
                 .iter()
