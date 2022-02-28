@@ -1,3 +1,4 @@
+use nom::number::complete::double;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -10,6 +11,10 @@ use nom::{
 };
 
 use crate::expr::Expr;
+
+fn parse_number<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
+    map(context("number", double), |nr| Expr::Num(nr))(i)
+}
 
 fn parse_keyword<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
     map(context("keyword", alphanumeric1), |sym_str: &str| {
@@ -37,7 +42,7 @@ fn parse_quote<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> 
 fn parse_expr<'a>(i: &'a str) -> IResult<&'a str, Expr, VerboseError<&'a str>> {
     delimited(
         multispace0,
-        alt((parse_list, parse_quote, parse_keyword)),
+        alt((parse_list, parse_number, parse_quote, parse_keyword)),
         multispace0,
     )(i)
 }
@@ -56,15 +61,18 @@ fn test_parse_alphanumerics() {
     fn kw<'a>(string: &'a str) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::Keyword(string.to_string())])
     }
+    fn nr<'a>(nr: f64) -> Result<Vec<Expr>, String> {
+        Ok(vec![Expr::Num(nr)])
+    }
     assert_eq!(parse("true"), kw("true"));
     assert_eq!(parse("false"), kw("false"));
-    assert_eq!(parse("1"), kw("1"));
-    assert_eq!(parse("5"), kw("5"));
+    assert_eq!(parse("1"), nr(1.));
+    assert_eq!(parse("5"), nr(5.));
 
     assert_eq!(parse("  true  "), kw("true"));
     assert_eq!(parse("  false  "), kw("false"));
-    assert_eq!(parse("  1  "), kw("1"));
-    assert_eq!(parse("  5  "), kw("5"));
+    assert_eq!(parse("  1  "), nr(1.));
+    assert_eq!(parse("  5  "), nr(5.));
 }
 
 #[test]
@@ -85,10 +93,15 @@ fn test_parse_lists() {
         )])
     }
     assert_eq!(parse("(a)"), ok_list(vec!("a")));
-    assert_eq!(parse("(123)"), ok_list(vec!("123")));
+    assert_eq!(parse("(123)"), Ok(vec![Expr::List(vec![Expr::Num(123.)])]));
     assert_eq!(
         parse("(     a         1       b          2      )"),
-        ok_list(vec!("a", "1", "b", "2"))
+        Ok(vec![Expr::List(vec![
+            Expr::Keyword("a".to_string()),
+            Expr::Num(1.),
+            Expr::Keyword("b".to_string()),
+            Expr::Num(2.)
+        ])])
     );
     assert_eq!(
         parse("(     a         (wat    woo    wii)       b          2      )"),
@@ -100,7 +113,7 @@ fn test_parse_lists() {
                 Expr::Keyword("wii".to_string())
             )),
             Expr::Keyword("b".to_string()),
-            Expr::Keyword("2".to_string())
+            Expr::Num(2.)
         ])])
     );
 }

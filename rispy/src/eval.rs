@@ -7,26 +7,16 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
         Expr::List(xs) => match xs.as_slice() {
-            [Expr::Keyword(proc_name), args @ ..] => {
-                let local_env = env.clone();
-                let gotten = local_env.get(proc_name.as_str());
-                match gotten {
-                    Some(Expr::Proc(proc)) => proc(args, env),
-                    Some(expr) => Err(format!("Cannot eval {expr}")),
-                    None => Err(format!("Cannot find {proc_name}")),
-                }
-            }
+            [head, args @ ..] => eval_with_env(head, env).and_then(|evaled| match evaled {
+                Expr::Proc(proc) => proc(args, env),
+                e => Err(format!("Cannot evaluate {e}")),
+            }),
             _ => Result::Err("Cannot evaluate empty list".to_string()),
         },
-        Expr::Keyword(kw) => kw
-            .parse::<u8>()
-            .map(|x| x as f64)
-            .or(kw.parse::<f64>())
-            .map(|x| Expr::Num(x))
-            .or(match env.get(kw.as_str()) {
-                Some(e) => Ok(e.clone()),
-                None => Err(format!("Undefined variable: {kw}")),
-            }),
+        Expr::Keyword(kw) => match env.get(kw.as_str()) {
+            Some(e) => Ok(e.clone()),
+            None => Err(format!("Undefined variable: {kw}")),
+        },
         e => Result::Ok(e.clone()),
     }
 }
@@ -46,18 +36,11 @@ fn test_eval_primitives() {
         eval(Expr::Keyword("true".to_string())),
         Ok(Expr::Boolean(true))
     );
-    assert_eq!(eval(Expr::Keyword("15".to_string())), Ok(Expr::Num(15.0)));
-    assert_eq!(eval(Expr::Keyword("0".to_string())), Ok(Expr::Num(0.0)));
-    assert_eq!(eval(Expr::Keyword("15.0".to_string())), Ok(Expr::Num(15.0)));
-    assert_eq!(
-        eval(Expr::Keyword("00015.0".to_string())),
-        Ok(Expr::Num(15.0))
-    );
-    assert_eq!(
-        eval(Expr::Keyword("-00015.0".to_string())),
-        Ok(Expr::Num(-15.0))
-    );
-    assert_eq!(eval(Expr::Keyword("-0.5".to_string())), Ok(Expr::Num(-0.5)));
+    assert_eq!(eval(Expr::Num(15.)), Ok(Expr::Num(15.0)));
+    assert_eq!(eval(Expr::Num(0.)), Ok(Expr::Num(0.0)));
+    assert_eq!(eval(Expr::Num(15.0)), Ok(Expr::Num(15.0)));
+    assert_eq!(eval(Expr::Num(-15.0)), Ok(Expr::Num(-15.0)));
+    assert_eq!(eval(Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
     assert_eq!(
         eval(Expr::Keyword("a".to_string())),
         Err("Undefined variable: a".to_string())
@@ -247,5 +230,14 @@ fn test_eval_fns() {
         "
         ),
         Ok(Expr::Num(21.))
+    );
+
+    assert_eq!(
+        eval_from_str(
+            "
+((fn (x) x) 10)
+        "
+        ),
+        Ok(Expr::Num(10.))
     );
 }
