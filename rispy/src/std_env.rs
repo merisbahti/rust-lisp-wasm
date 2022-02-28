@@ -50,6 +50,15 @@ pub fn get_std_lib() -> Env {
             })),
         ),
         (
+            "equal".to_string(),
+            Expr::Proc(Arc::new(|exprs, env| {
+                collect_numbers(exprs, env).and_then(|numbers| match numbers.as_slice() {
+                    [lhs, rhs] => Ok(Expr::Boolean(lhs == rhs)),
+                    _ => Err("Only 2 arguments to equal please".to_string()),
+                })
+            })),
+        ),
+        (
             "cond".to_string(),
             Expr::Proc(Arc::new(|cases, env| {
                 let cond_pairs: Result<Vec<(Expr, Expr)>, String> =
@@ -121,7 +130,7 @@ pub fn get_std_lib() -> Env {
                         define_proc(parsed_parameters, proc_definition.into())
                     })
                 }
-                _ => Err("Let takes 2 arguments, a list of arguments and a procedure".to_string()),
+                _ => Err("fn takes 2 arguments, a list of arguments and a procedure".to_string()),
             })),
         ),
     ])

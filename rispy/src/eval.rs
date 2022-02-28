@@ -6,7 +6,6 @@ use crate::std_env::Env;
 pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
         Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
-        Expr::Proc(_) => Result::Err("Can not eval proc.".to_string()),
         Expr::List(xs) => match xs.as_slice() {
             [Expr::Keyword(proc_name), args @ ..] => {
                 let local_env = env.clone();
@@ -19,8 +18,8 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
             }
             _ => Result::Err("Cannot evaluate empty list".to_string()),
         },
-        Expr::Keyword(kw) => Err("")
-            .or(kw.parse::<u8>())
+        Expr::Keyword(kw) => kw
+            .parse::<u8>()
             .map(|x| x as f64)
             .or(kw.parse::<f64>())
             .map(|x| Expr::Num(x))
@@ -234,5 +233,19 @@ fn test_eval_fns() {
         "
         ),
         Ok(Expr::Num(2048.))
+    );
+    assert_eq!(
+        eval_from_str(
+            "
+(let fibiter
+    (fn (n a b)
+        (cond
+        ((equal n 0) a)
+        (true (fibiter (sub n 1) b (add a b))))))
+(let fib (fn (n) (fibiter n 0 1)))
+(fib 8)
+        "
+        ),
+        Ok(Expr::Num(21.))
     );
 }
