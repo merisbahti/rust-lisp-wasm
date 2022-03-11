@@ -13,7 +13,7 @@ use nom::{
 use crate::expr::Expr;
 
 fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(context("number", double), |nr| Expr::Num(nr))(i)
+    map(context("number", double), Expr::Num)(i)
 }
 
 fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
@@ -25,7 +25,7 @@ fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("list", delimited(char('('), many0(parse_expr), char(')'))),
-        |list| Expr::List(list),
+        Expr::List,
     )(i)
 }
 

@@ -26,9 +26,9 @@ extern "C" {
 // hello message.
 #[wasm_bindgen]
 pub fn evaluate_symbolic_string(expression: String) -> String {
-    let result = eval::eval_from_str(&expression.to_string());
+    let result = eval::eval_from_str(&expression);
     return match result {
         Ok(a) => format!("{a}"),
-        Err(e) => format!("Error: {}", e).to_string(),
+        Err(e) => format!("Error: {}", e),
     };
 }

@@ -6,16 +6,15 @@ use std::sync::Arc;
 
 pub type Env = HashMap<String, Expr>;
 
-fn collect_numbers<'a>(exprs: &'a [Expr], env: &Env) -> Result<Vec<f64>, String> {
+fn collect_numbers(exprs: &[Expr], env: &Env) -> Result<Vec<f64>, String> {
     let empty_vec: Vec<f64> = Vec::new();
     let starting: Result<Vec<f64>, String> = Ok(empty_vec);
-    exprs.into_iter().fold(starting, |acc, unevaled_expr| {
+    exprs.iter().fold(starting, |acc, unevaled_expr| {
         acc.and_then(
-            |results_vec| match eval_with_env(unevaled_expr, &mut env.clone()) {
+            |mut results_vec| match eval_with_env(unevaled_expr, &mut env.clone()) {
                 Ok(Expr::Num(n)) => {
-                    let mut clone = results_vec.clone();
-                    clone.push(n);
-                    Ok(clone)
+                    results_vec.push(n);
+                    Ok(results_vec)
                 }
                 Ok(thing) => Err(format!("Expected number, but found {thing:?}")),
                 Err(e) => Err(e),
@@ -25,7 +24,7 @@ fn collect_numbers<'a>(exprs: &'a [Expr], env: &Env) -> Result<Vec<f64>, String>
 }
 
 fn collect_keywords(exprs: &[Expr]) -> Result<Vec<String>, String> {
-    exprs.into_iter().fold(Ok(vec![]), |acc, maybe_kw| {
+    exprs.iter().fold(Ok(vec![]), |acc, maybe_kw| {
         acc.and_then(|mut results_vec| match maybe_kw {
             Expr::Keyword(kw) => {
                 results_vec.push(kw.to_string());
@@ -62,13 +61,12 @@ pub fn get_std_lib() -> Env {
             "cond".to_string(),
             Expr::Proc(Arc::new(|cases, env| {
                 let cond_pairs: Result<Vec<(Expr, Expr)>, String> =
-                    cases.into_iter().fold(Ok(vec![]), |acc, curr| {
-                        acc.and_then(|v| match curr {
+                    cases.iter().fold(Ok(vec![]), |acc, curr| {
+                        acc.and_then(|mut v| match curr {
                             Expr::List(l) => match l.as_slice() {
                                 [head, butt] => {
-                                    let mut new_acc = v.clone();
-                                    new_acc.push((head.clone(), butt.clone()));
-                                    Ok(new_acc)
+                                    v.push((head.clone(), butt.clone()));
+                                    Ok(v)
                                 }
                                 _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
                             },
@@ -79,10 +77,9 @@ pub fn get_std_lib() -> Env {
                     res.into_iter()
                         .fold(None, |acc, (cond, cons)| {
                             acc.or_else(|| match eval_with_env(&cond, &mut env.clone()) {
-                                Ok(Expr::Boolean(true)) => Some(
-                                    eval_with_env(&cons, &mut env.clone())
-                                        .map(|evaled_cons| evaled_cons),
-                                ),
+                                Ok(Expr::Boolean(true)) => {
+                                    Some(eval_with_env(&cons, &mut env.clone()))
+                                }
                                 Ok(Expr::Boolean(false)) => None,
                                 Err(e) => Some(Err(e)),
                                 _ => Some(Err(format!(
@@ -90,7 +87,7 @@ pub fn get_std_lib() -> Env {
                                 ))),
                             })
                         })
-                        .unwrap_or(Err("Nothing evaluated to true in cond".to_string()))
+                        .unwrap_or_else(|| Err("Nothing evaluated to true in cond".to_string()))
                 });
 
                 consequent
@@ -147,12 +144,12 @@ fn define_proc(parameters: Vec<String>, proc_definition: Vec<Expr>) -> Expr {
         }
 
         let start: Result<Vec<Expr>, String> = Ok(vec![]);
-        let res_evaled_arguments = pre_arguments.into_iter().fold(start, |acc, curr| {
+        let res_evaled_arguments = pre_arguments.iter().fold(start, |acc, curr| {
             acc.and_then(|args_so_far| {
-                eval_with_env(curr, &mut local_env.clone()).and_then(|evaled_arg| {
+                eval_with_env(curr, &mut local_env.clone()).map(|evaled_arg| {
                     let mut new_vec = args_so_far.clone();
                     new_vec.push(evaled_arg);
-                    Ok(new_vec)
+                    new_vec
                 })
             })
         });
