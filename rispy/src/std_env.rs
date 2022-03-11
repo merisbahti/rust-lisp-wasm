@@ -51,10 +51,17 @@ pub fn get_std_lib() -> Env {
         (
             "equal".to_string(),
             Expr::Proc(Arc::new(|exprs, env| {
-                collect_numbers(exprs, env).and_then(|numbers| match numbers.as_slice() {
-                    [lhs, rhs] => Ok(Expr::Boolean(lhs == rhs)),
-                    _ => Err("Only 2 arguments to equal please".to_string()),
-                })
+                let numbers = match collect_numbers(exprs, env) {
+                    Ok(numbers) => numbers,
+                    Err(e) => return Err(e),
+                };
+
+                let (rhs, lhs) = match numbers.as_slice() {
+                    [lhs, rhs] => (lhs, rhs),
+                    _ => return Err("Only 2 arguments to equal please".to_string()),
+                };
+
+                Ok(Expr::Boolean(lhs == rhs))
             })),
         ),
         (
