@@ -1,8 +1,10 @@
+use nom::bytes::complete::is_not;
+use nom::multi::many1;
 use nom::number::complete::double;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alphanumeric1, char, multispace0},
+    character::complete::{char, multispace0},
     combinator::map,
     error::{context, VerboseError},
     multi::many0,
@@ -17,8 +19,8 @@ fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 }
 
 fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(context("keyword", alphanumeric1), |sym_str: &str| {
-        Expr::Keyword(sym_str.to_string())
+    map(context("keyword", many1(is_not("\n\r )("))), |sym_str| {
+        Expr::Keyword(sym_str.into_iter().collect())
     })(i)
 }
 
@@ -64,7 +66,10 @@ fn test_parse_alphanumerics() {
     fn nr<'a>(nr: f64) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::Num(nr)])
     }
+
     assert_eq!(parse("true"), kw("true"));
+    assert_eq!(parse("+"), kw("+"));
+    assert_eq!(parse("'"), kw("'"));
     assert_eq!(parse("false"), kw("false"));
     assert_eq!(parse("1"), nr(1.));
     assert_eq!(parse("5"), nr(5.));
@@ -76,10 +81,25 @@ fn test_parse_alphanumerics() {
 }
 
 #[test]
-fn test_parse_alphanumerics_fails() {
-    assert!(parse("--::--").is_err());
-    assert!(parse("'").is_err());
-    assert!(parse("'dsa").is_err());
+fn test_parse_quote() {
+    let res = parse("'()");
+    assert_eq!(res.as_ref().map(|x| x.len()), Ok(1));
+
+    let borrowed = res.map(|x| x.get(0).cloned()).unwrap().unwrap();
+    assert!(match borrowed {
+        Expr::Quote(v) if v.len() == 0 => true,
+        _ => false,
+    });
+
+    let res2 = parse("'(a b)").map(|x| x.get(0).cloned()).unwrap().unwrap();
+
+    assert!(match res2 {
+        Expr::Quote(v)
+            if v.get(0).unwrap().clone() == Expr::Keyword("a".to_string())
+                && v.get(1).unwrap().clone() == Expr::Keyword("b".to_string()) =>
+            true,
+        _ => false,
+    });
 }
 
 #[test]

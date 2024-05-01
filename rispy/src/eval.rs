@@ -9,7 +9,7 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
         Expr::List(xs) => {
             let (head, args) = match xs.as_slice() {
                 [head, args @ ..] => (head, args),
-                _ => return Result::Err("Cannot evaluate empty list".to_string()),
+                _ => return Result::Ok(e.clone()),
             };
 
             match eval_with_env(head, env) {
@@ -128,10 +128,7 @@ fn test_scoping() {
 fn test_eval_fns() {
     assert_eq!(eval_from_str("(add 1 2)"), Ok(Expr::Num(3.)));
     assert_eq!(eval_from_str("(add 1 2 3 4)"), Ok(Expr::Num(10.)));
-    assert_eq!(
-        eval_from_str("()"),
-        Err("Cannot evaluate empty list".to_string())
-    );
+    assert_eq!(eval_from_str("()"), Ok(Expr::List(vec![])));
     assert_eq!(
         eval_from_str(
             "
