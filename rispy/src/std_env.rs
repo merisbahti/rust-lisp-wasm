@@ -24,15 +24,15 @@ fn collect_numbers(exprs: &[Expr], env: &Env) -> Result<Vec<f64>, String> {
 }
 
 fn collect_keywords(exprs: &[Expr]) -> Result<Vec<String>, String> {
-    exprs.iter().fold(Ok(vec![]), |acc, maybe_kw| {
-        acc.and_then(|mut results_vec| match maybe_kw {
+    exprs
+        .iter()
+        .try_fold(vec![], |mut results_vec, maybe_kw| match maybe_kw {
             Expr::Keyword(kw) => {
                 results_vec.push(kw.to_string());
                 Ok(results_vec)
             }
             thing => Err(format!("Expected number, but found {thing:?}")),
         })
-    })
 }
 
 pub fn get_std_lib() -> Env {
