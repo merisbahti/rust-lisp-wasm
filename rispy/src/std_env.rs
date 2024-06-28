@@ -68,17 +68,15 @@ pub fn get_std_lib() -> Env {
             "cond".to_string(),
             Expr::Proc(Arc::new(|cases, env| {
                 let cond_pairs: Result<Vec<(Expr, Expr)>, String> =
-                    cases.iter().fold(Ok(vec![]), |acc, curr| {
-                        acc.and_then(|mut v| match curr {
-                            Expr::List(l) => match l.as_slice() {
-                                [head, butt] => {
-                                    v.push((head.clone(), butt.clone()));
-                                    Ok(v)
-                                }
-                                _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
-                            },
+                    cases.iter().try_fold(vec![], |mut v, curr| match curr {
+                        Expr::List(l) => match l.as_slice() {
+                            [head, butt] => {
+                                v.push((head.clone(), butt.clone()));
+                                Ok(v)
+                            }
                             _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
-                        })
+                        },
+                        _ => Err(format!("Cond expects a list of pairs ... got: {curr:?}")),
                     });
                 let consequent: Result<Expr, String> = cond_pairs.and_then(|res| {
                     res.into_iter()

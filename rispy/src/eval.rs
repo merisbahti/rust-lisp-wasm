@@ -14,8 +14,8 @@ pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
 
             match eval_with_env(head, env) {
                 Ok(Expr::Proc(proc)) => proc(args, env),
-                Ok(expr) => return Err(format!("Expected proc, but found: {expr}")),
-                Err(e) => return Err(e),
+                Ok(expr) => Err(format!("Expected proc, but found: {expr}")),
+                Err(e) => Err(e),
             }
         }
         Expr::Keyword(kw) => match env.get(kw.as_str()) {
