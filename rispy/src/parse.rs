@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use nom::bytes::complete::is_not;
 use nom::multi::many1;
 use nom::number::complete::double;
@@ -32,19 +34,15 @@ fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 }
 
 fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(
-        context("quote", preceded(tag("'"), parse_list)),
-        |exprs| match exprs {
-            Expr::List(xs) => Expr::Quote(xs),
-            _ => panic!("oops"),
-        },
-    )(i)
+    map(context("quote", preceded(tag("'"), parse_expr)), |exprs| {
+        Expr::Quote(Rc::new(exprs))
+    })(i)
 }
 
 fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     delimited(
         multispace0,
-        alt((parse_list, parse_number, parse_quote, parse_keyword)),
+        alt((parse_quote, parse_list, parse_number, parse_keyword)),
         multispace0,
     )(i)
 }
@@ -87,18 +85,34 @@ fn test_parse_quote() {
 
     let borrowed = res.map(|x| x.get(0).cloned()).unwrap().unwrap();
     assert!(match borrowed {
-        Expr::Quote(v) if v.len() == 0 => true,
+        Expr::Quote(rc) => match &*rc {
+            &Expr::List(ref v) if v.is_empty() => true,
+            _ => false,
+        },
         _ => false,
     });
 
     let res2 = parse("'(a b)").map(|x| x.get(0).cloned()).unwrap().unwrap();
 
     assert!(match res2 {
-        Expr::Quote(v)
-            if v.get(0).unwrap().clone() == Expr::Keyword("a".to_string())
-                && v.get(1).unwrap().clone() == Expr::Keyword("b".to_string()) =>
-            true,
+        Expr::Quote(rc) => match &*rc {
+            &Expr::List(ref v)
+                if v.get(0).unwrap().clone() == Expr::Keyword("a".to_string())
+                    && v.get(1).unwrap().clone() == Expr::Keyword("b".to_string()) =>
+                true,
+            _ => false,
+        },
         _ => false,
+    });
+
+    let res3 = parse("'a").map(|x| x.get(0).cloned()).unwrap().unwrap();
+
+    assert!(match res3 {
+        Expr::Quote(rc) => match &*rc {
+            &Expr::Keyword(ref kw) => kw == "a",
+            _ => panic!("found: {:?}", rc),
+        },
+        _ => panic!("found: {:?}", res3),
     });
 }
 

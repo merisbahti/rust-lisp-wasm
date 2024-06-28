@@ -5,7 +5,7 @@ use crate::std_env::Env;
 
 pub fn eval_with_env(e: &Expr, env: &mut Env) -> Result<Expr, String> {
     match e {
-        Expr::Quote(exprs) => Result::Ok(Expr::List(exprs.to_vec())),
+        Expr::Quote(rc) => Result::Ok(rc.as_ref().clone()),
         Expr::List(xs) => {
             let (head, args) = match xs.as_slice() {
                 [head, args @ ..] => (head, args),
@@ -55,7 +55,9 @@ fn test_eval_primitives() {
     assert_eq!(eval(Expr::Num(15.0)), Ok(Expr::Num(15.)));
     assert_eq!(eval(Expr::Num(-0.5)), Ok(Expr::Num(-0.5)));
     assert_eq!(
-        eval(Expr::Quote(vec![Expr::Keyword("true".to_string())])),
+        eval(Expr::Quote(std::rc::Rc::new(Expr::List(vec![
+            Expr::Keyword("true".to_string())
+        ])))),
         Ok(Expr::List(vec![Expr::Keyword("true".to_string())]))
     );
 }
