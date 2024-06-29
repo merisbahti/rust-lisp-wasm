@@ -2,6 +2,7 @@ extern crate cfg_if;
 extern crate nom;
 extern crate wasm_bindgen;
 
+mod compile;
 mod eval;
 mod expr;
 mod parse;

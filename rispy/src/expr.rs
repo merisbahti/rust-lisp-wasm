@@ -13,6 +13,7 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Rc<Expr>),
+    VMProc(usize),
     Proc(Arc<dyn Fn(&[Expr], &mut Env) -> Result<Expr, String>>),
 }
 
@@ -28,6 +29,7 @@ impl Display for Expr {
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
             Expr::Proc(_) => write!(formatter, "Proc(...)"),
+            Expr::VMProc(_) => write!(formatter, "VMProc(...)"),
         }
     }
 }

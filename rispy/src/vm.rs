@@ -1,9 +1,9 @@
-use std::borrow::BorrowMut;
-
 use crate::expr::Expr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
+    Lookup(String),
+    Call,
     Return,
     Print,
     Constant(usize),
@@ -14,8 +14,10 @@ pub enum VMInstruction {
     Negate,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct Callframe {}
+#[derive(Clone, Debug, PartialEq, Copy)]
+struct Callframe {
+    return_ip: usize,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 struct VM {
@@ -24,9 +26,10 @@ struct VM {
     stack: Vec<Expr>,
 }
 
-struct Chunk {
-    code: Vec<VMInstruction>,
-    constants: Vec<Expr>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct Chunk {
+    pub code: Vec<VMInstruction>,
+    pub constants: Vec<Expr>,
 }
 
 fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
@@ -38,7 +41,19 @@ fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
         };
         vm.ip += 1;
         match instruction {
-            VMInstruction::Return => return Ok(vm),
+            VMInstruction::Lookup(kw) => if (kw == "print") {},
+            VMInstruction::Call => {
+                // check if bot of stack points to a function???
+                todo!();
+            }
+            VMInstruction::Return => {
+                let frame = if let Some(frame) = vm.call_frames.pop() {
+                    frame
+                } else {
+                    return Ok(vm);
+                };
+                vm.ip = frame.return_ip;
+            }
             VMInstruction::Print => {
                 let argument = if let Some(argument) = vm.stack.pop() {
                     argument
