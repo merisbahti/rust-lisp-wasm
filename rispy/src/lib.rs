@@ -6,6 +6,7 @@ mod eval;
 mod expr;
 mod parse;
 mod std_env;
+mod vm;
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
 
