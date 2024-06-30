@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{compile, expr::Expr, parse};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -5,25 +7,21 @@ pub enum VMInstruction {
     Lookup(String),
     Call,
     Return,
-    Print,
     Constant(usize),
     Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Negate,
 }
 
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq)]
 struct Callframe {
-    return_ip: usize,
+    ip: usize,
+    chunk: Chunk,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct VM {
-    call_frames: Vec<Callframe>,
-    ip: usize,
+    callframes: Vec<Callframe>,
     stack: Vec<Expr>,
+    built_ins: HashMap<String, Vec<VMInstruction>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,36 +30,44 @@ pub struct Chunk {
     pub constants: Vec<Expr>,
 }
 
-fn run(chunk: Chunk, mut vm: VM) -> Result<VM, String> {
+fn run(mut vm: VM) -> Result<VM, String> {
     loop {
-        let instruction = if let Some(instruction) = chunk.code.get(vm.ip) {
+        let callframes = &mut vm.callframes;
+        let len = callframes.len();
+        let callframe = match callframes.get_mut(len - 1) {
+            Some(x) => x,
+            _ => return Err("no callframes".to_string()),
+        };
+        let chunk = &callframe.chunk;
+        let instruction = if let Some(instruction) = chunk.code.get(callframe.ip) {
             instruction
         } else {
             return Err("End of code reached".to_string());
         };
-        vm.ip += 1;
+        callframe.ip += 1;
         match instruction {
-            VMInstruction::Lookup(kw) => if (kw == "print") {},
+            VMInstruction::Lookup(_) => todo!(),
             VMInstruction::Call => {
                 // check if bot of stack points to a function???
+                let new_callframe = Callframe {
+                    ip: 0,
+                    chunk: Chunk {
+                        code: vec![],
+                        constants: vec![],
+                    },
+                };
+
+                vm.callframes.push(new_callframe);
+
                 todo!("call nyi");
             }
-            VMInstruction::Return => {
-                let frame = if let Some(frame) = vm.call_frames.pop() {
-                    frame
-                } else {
-                    return Ok(vm);
-                };
-                vm.ip = frame.return_ip;
-            }
-            VMInstruction::Print => {
-                let argument = if let Some(argument) = vm.stack.pop() {
-                    argument
-                } else {
-                    return Err("too few args for print on stack".to_string());
-                };
-                println!("{}", argument);
-            }
+            VMInstruction::Return => match callframes.pop() {
+                Some(_) if callframes.len() == 0 => return Ok(vm),
+                Some(_) => {}
+                _ => {
+                    return Err("no callframes".to_string());
+                }
+            },
             VMInstruction::Constant(arg) => {
                 if let Some(constant) = chunk.constants.get(arg.clone()) {
                     vm.stack.push(constant.clone());
@@ -80,46 +86,33 @@ fn run(chunk: Chunk, mut vm: VM) -> Result<VM, String> {
                     _ => return Err("addition requires two numbers".to_string()),
                 }
             }
-            VMInstruction::Subtract => todo!(),
-            VMInstruction::Multiply => todo!(),
-            VMInstruction::Divide => todo!(),
-            VMInstruction::Negate => todo!(),
         }
     }
 }
 
-fn interpret_chunk(chunk: Chunk, vm: VM) -> Result<VM, String> {
-    return run(chunk, vm);
-}
-
 #[test]
 fn test_interpreter() {
-    let vm = VM {
-        call_frames: vec![],
-        ip: 0,
-        stack: vec![],
-    };
     let chunk = Chunk {
         code: vec![VMInstruction::Return],
         constants: vec![],
     };
+    let vm = VM {
+        callframes: vec![Callframe { ip: 0, chunk }],
+        stack: vec![],
+        built_ins: HashMap::new(),
+    };
     assert_eq!(
-        interpret_chunk(chunk, vm),
+        run(vm),
         Ok(VM {
-            call_frames: vec![],
-            ip: 1,
+            callframes: vec![],
             stack: vec![],
+            built_ins: HashMap::new(),
         })
     )
 }
 
 #[test]
 fn test_add() {
-    let vm = VM {
-        call_frames: vec![],
-        ip: 0,
-        stack: vec![],
-    };
     let chunk = Chunk {
         code: vec![
             VMInstruction::Constant(0),
@@ -129,25 +122,39 @@ fn test_add() {
         ],
         constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
     };
+
+    let callframe = Callframe { ip: 0, chunk };
+
+    let vm = VM {
+        callframes: vec![callframe],
+        stack: vec![],
+        built_ins: HashMap::new(),
+    };
+
     assert_eq!(
-        interpret_chunk(chunk, vm),
+        run(vm),
         Ok(VM {
-            call_frames: vec![],
-            ip: 4,
+            callframes: vec![],
             stack: vec![Expr::Num(3.0)],
+            built_ins: HashMap::new(),
         })
     )
 }
 
 fn get_initial_vm_and_chunk() -> (VM, Chunk) {
-    let vm = VM {
-        call_frames: vec![],
-        ip: 0,
-        stack: vec![],
-    };
+    let built_ins: HashMap<String, Vec<VMInstruction>> = HashMap::from([(
+        "+".to_string(),
+        vec![VMInstruction::Add, VMInstruction::Return],
+    )]);
+
     let chunk = Chunk {
         code: vec![],
         constants: vec![],
+    };
+    let vm = VM {
+        callframes: vec![],
+        stack: vec![],
+        built_ins,
     };
     (vm, chunk)
 }
@@ -170,7 +177,7 @@ fn jit_run(input: String) -> Result<Expr, String> {
 
     compile::compile(expr, &mut chunk);
 
-    let interpreted = match interpret_chunk(chunk, vm) {
+    let interpreted = match run(vm) {
         Ok(e) => e,
         Err(err) => return Result::Err(err),
     };
