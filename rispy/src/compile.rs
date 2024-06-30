@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     expr::Expr,
     vm::{Chunk, VMInstruction},

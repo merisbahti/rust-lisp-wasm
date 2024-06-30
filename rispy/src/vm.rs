@@ -44,7 +44,7 @@ fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
             VMInstruction::Lookup(kw) => if (kw == "print") {},
             VMInstruction::Call => {
                 // check if bot of stack points to a function???
-                todo!();
+                todo!("call nyi");
             }
             VMInstruction::Return => {
                 let frame = if let Some(frame) = vm.call_frames.pop() {
@@ -70,16 +70,14 @@ fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
                 }
             }
             VMInstruction::Add => {
-                let (arg1, arg2) =
-                    if let (Some(arg1), Some(arg2)) = (vm.stack.pop(), vm.stack.pop()) {
-                        (arg1, arg2)
-                    } else {
-                        return Err("too few args for add on stack".to_string());
-                    };
-                if let (Expr::Num(arg1), Expr::Num(arg2)) = (arg1, arg2) {
-                    vm.stack.push(Expr::Num(arg1 + arg2));
-                } else {
-                    return Err("addition requires two numbers".to_string());
+                let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
+                    (Some(arg1), Some(arg2)) => (arg1, arg2),
+                    _ => return Err("too few args for add on stack".to_string()),
+                };
+
+                match (arg1, arg2) {
+                    (Expr::Num(arg1), Expr::Num(arg2)) => vm.stack.push(Expr::Num(arg1 + arg2)),
+                    _ => return Err("addition requires two numbers".to_string()),
                 }
             }
             VMInstruction::Subtract => todo!(),
@@ -141,6 +139,8 @@ fn test_add() {
     )
 }
 
+// just for tests
+#[allow(dead_code)]
 fn jit_run(input: String) -> Result<Expr, String> {
     // parse, compile and run, then check what's left on the stack
     let parsed_expr = parse::parse(&input).and_then(|x| match x.first() {
