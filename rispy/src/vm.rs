@@ -32,7 +32,7 @@ pub struct Chunk {
     pub constants: Vec<Expr>,
 }
 
-fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
+fn run(chunk: Chunk, mut vm: VM) -> Result<VM, String> {
     loop {
         let instruction = if let Some(instruction) = chunk.code.get(vm.ip) {
             instruction
@@ -88,7 +88,7 @@ fn run(chunk: &Chunk, mut vm: VM) -> Result<VM, String> {
     }
 }
 
-fn interpret_chunk(chunk: &Chunk, vm: VM) -> Result<VM, String> {
+fn interpret_chunk(chunk: Chunk, vm: VM) -> Result<VM, String> {
     return run(chunk, vm);
 }
 
@@ -104,7 +104,7 @@ fn test_interpreter() {
         constants: vec![],
     };
     assert_eq!(
-        interpret_chunk(&chunk, vm),
+        interpret_chunk(chunk, vm),
         Ok(VM {
             call_frames: vec![],
             ip: 1,
@@ -130,13 +130,26 @@ fn test_add() {
         constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
     };
     assert_eq!(
-        interpret_chunk(&chunk, vm),
+        interpret_chunk(chunk, vm),
         Ok(VM {
             call_frames: vec![],
             ip: 4,
             stack: vec![Expr::Num(3.0)],
         })
     )
+}
+
+fn get_initial_vm_and_chunk() -> (VM, Chunk) {
+    let vm = VM {
+        call_frames: vec![],
+        ip: 0,
+        stack: vec![],
+    };
+    let chunk = Chunk {
+        code: vec![],
+        constants: vec![],
+    };
+    (vm, chunk)
 }
 
 // just for tests
@@ -153,20 +166,11 @@ fn jit_run(input: String) -> Result<Expr, String> {
         e @ Err(_) => return e,
     };
 
-    let mut chunk = Chunk {
-        code: vec![],
-        constants: vec![],
-    };
+    let (vm, mut chunk) = get_initial_vm_and_chunk();
 
     compile::compile(expr, &mut chunk);
 
-    let vm = VM {
-        call_frames: vec![],
-        ip: 0,
-        stack: vec![],
-    };
-
-    let interpreted = match interpret_chunk(&chunk, vm) {
+    let interpreted = match interpret_chunk(chunk, vm) {
         Ok(e) => e,
         Err(err) => return Result::Err(err),
     };
