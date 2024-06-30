@@ -46,7 +46,7 @@ fn run(mut vm: VM) -> Result<VM, String> {
         };
         callframe.ip += 1;
         match instruction {
-            VMInstruction::Lookup(_) => todo!(),
+            VMInstruction::Lookup(_) => todo!("lookup"),
             VMInstruction::Call => {
                 // check if bot of stack points to a function???
                 let new_callframe = Callframe {
@@ -173,9 +173,13 @@ fn jit_run(input: String) -> Result<Expr, String> {
         e @ Err(_) => return e,
     };
 
-    let (vm, mut chunk) = get_initial_vm_and_chunk();
+    let (mut vm, mut chunk) = get_initial_vm_and_chunk();
 
     compile::compile(expr, &mut chunk);
+
+    print!("vm: {:?}", vm);
+    let callframe = Callframe { ip: 0, chunk };
+    vm.callframes.push(callframe);
 
     let interpreted = match run(vm) {
         Ok(e) => e,
