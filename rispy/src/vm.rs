@@ -1,4 +1,4 @@
-use crate::expr::Expr;
+use crate::{compile, expr::Expr, parse};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
@@ -139,4 +139,49 @@ fn test_add() {
             stack: vec![Expr::Num(3.0)],
         })
     )
+}
+
+fn jit_run(input: String) -> Result<Expr, String> {
+    // parse, compile and run, then check what's left on the stack
+    let parsed_expr = parse::parse(&input).and_then(|x| match x.first() {
+        Some(res) if x.len() == 1 => Ok(res.clone()),
+        _ => Err(format!("expected one expression, got {}", x.len())),
+    });
+
+    let expr = match parsed_expr {
+        Ok(expr) => expr,
+        e @ Err(_) => return e,
+    };
+
+    let mut chunk = Chunk {
+        code: vec![],
+        constants: vec![],
+    };
+
+    compile::compile(expr, &mut chunk);
+
+    let vm = VM {
+        call_frames: vec![],
+        ip: 0,
+        stack: vec![],
+    };
+
+    let interpreted = match interpret_chunk(&chunk, vm) {
+        Ok(e) => e,
+        Err(err) => return Result::Err(err),
+    };
+
+    match interpreted.stack.get(0) {
+        Some(top) if interpreted.stack.len() == 1 => Ok(top.clone()),
+        _ => Result::Err(format!(
+            "expected one value on the stack, got {}",
+            interpreted.stack.len()
+        )),
+    }
+}
+
+#[test]
+fn compiled_test() {
+    let res = jit_run("(+ 1 2)".to_string());
+    assert_eq!(res, Ok(Expr::Num(3.0)));
 }

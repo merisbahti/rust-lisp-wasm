@@ -5,7 +5,7 @@ use crate::{
     vm::{Chunk, VMInstruction},
 };
 
-fn compile(expr: Expr, chunk: &mut Chunk) -> Chunk {
+pub fn compile(expr: Expr, chunk: &mut Chunk) {
     match expr {
         Expr::List(exprs) => {
             exprs.iter().for_each(|e| {
@@ -26,7 +26,6 @@ fn compile(expr: Expr, chunk: &mut Chunk) -> Chunk {
         Expr::Proc(_) => panic!("Cannot compile a procedure"),
         Expr::VMProc(_) => panic!("Cannot compile a VMProc"),
     }
-    chunk.clone()
 }
 
 #[test]
@@ -35,15 +34,17 @@ fn test_simple_add_compilation() {
         code: vec![],
         constants: vec![],
     };
+
+    compile(
+        Expr::List(vec![
+            Expr::Keyword("+".to_string()),
+            Expr::Num(1.0),
+            Expr::Num(2.0),
+        ]),
+        &mut initial_chunk,
+    );
     assert_eq!(
-        compile(
-            Expr::List(vec![
-                Expr::Keyword("+".to_string()),
-                Expr::Num(1.0),
-                Expr::Num(2.0)
-            ]),
-            &mut initial_chunk
-        ),
+        initial_chunk,
         Chunk {
             code: vec![
                 VMInstruction::Lookup("+".to_string()),
