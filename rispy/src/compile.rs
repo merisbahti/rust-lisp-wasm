@@ -9,7 +9,8 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
             exprs.iter().for_each(|e| {
                 compile(e.clone(), chunk);
             });
-            chunk.code.push(VMInstruction::Call);
+            chunk.code.push(VMInstruction::Call(exprs.len() - 1));
+            chunk.code.push(VMInstruction::Return);
         }
         nr @ Expr::Num(_) => {
             chunk.constants.push(nr);
@@ -23,6 +24,7 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::Proc(_) => panic!("Cannot compile a procedure"),
         Expr::VMProc(_) => panic!("Cannot compile a VMProc"),
+        Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
     }
 }
 
@@ -48,7 +50,8 @@ fn test_simple_add_compilation() {
                 VMInstruction::Lookup("+".to_string()),
                 VMInstruction::Constant(0),
                 VMInstruction::Constant(1),
-                VMInstruction::Call
+                VMInstruction::Call(2),
+                VMInstruction::Return,
             ],
             constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
         }

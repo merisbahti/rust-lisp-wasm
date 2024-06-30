@@ -5,7 +5,7 @@ use crate::{compile, expr::Expr, parse};
 #[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
     Lookup(String),
-    Call,
+    Call(usize),
     Return,
     Constant(usize),
     Add,
@@ -21,7 +21,7 @@ struct Callframe {
 struct VM {
     callframes: Vec<Callframe>,
     stack: Vec<Expr>,
-    built_ins: HashMap<String, Vec<VMInstruction>>,
+    globals: HashMap<String, Expr>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,32 +42,57 @@ fn run(mut vm: VM) -> Result<VM, String> {
         let instruction = if let Some(instruction) = chunk.code.get(callframe.ip) {
             instruction
         } else {
+            println!("call called: {:#?}", vm);
             return Err("End of code reached".to_string());
         };
         callframe.ip += 1;
         match instruction {
-            VMInstruction::Lookup(_) => todo!("lookup"),
-            VMInstruction::Call => {
-                // check if bot of stack points to a function???
-                let new_callframe = Callframe {
-                    ip: 0,
-                    chunk: Chunk {
-                        code: vec![],
-                        constants: vec![],
+            VMInstruction::Lookup(name) => {
+                let instructions = match vm.globals.get(name) {
+                    Some(instructions) => instructions,
+                    None => return Err(format!("no built-in function found: {name}")),
+                };
+                vm.stack.push(instructions.clone());
+            }
+            VMInstruction::Call(arity) => {
+                let new_callframe = match vm.stack.get(vm.stack.len() - arity -1) {
+                    Some(Expr::BuiltIn(instructions)) => Callframe {
+                        ip: 0,
+                        chunk: Chunk {
+                            code: instructions.clone(),
+                            constants: vec![],
+                        },
                     },
+                    found => {
+                        return Err(
+                            format!("no function to call on stack (can only handle builtins for now), found: {:?}, \nstack:{:?}", found, vm.stack)
+                        )
+                    }
                 };
 
                 vm.callframes.push(new_callframe);
-
-                todo!("call nyi");
             }
-            VMInstruction::Return => match callframes.pop() {
-                Some(_) if callframes.len() == 0 => return Ok(vm),
-                Some(_) => {}
-                _ => {
-                    return Err("no callframes".to_string());
+            VMInstruction::Return => {
+                // remove fn from stack?
+                let rv = match (vm.stack.pop(), vm.stack.pop()) {
+                    (Some(rv), Some(Expr::BuiltIn(_))) => rv,
+                    (Some(_), Some(not_fn)) => {
+                        return Err(format!(
+                            "expected fn on stack after returning, but found: {not_fn}",
+                        ))
+                    }
+                    _ => return Err(format!("too few args for return on stack: {:?}", vm)),
+                };
+                vm.stack.push(rv);
+
+                match callframes.pop() {
+                    Some(_) if callframes.len() == 0 => return Ok(vm),
+                    Some(_) => {}
+                    _ => {
+                        return Err("no callframes".to_string());
+                    }
                 }
-            },
+            }
             VMInstruction::Constant(arg) => {
                 if let Some(constant) = chunk.constants.get(arg.clone()) {
                     vm.stack.push(constant.clone());
@@ -91,27 +116,6 @@ fn run(mut vm: VM) -> Result<VM, String> {
 }
 
 #[test]
-fn test_interpreter() {
-    let chunk = Chunk {
-        code: vec![VMInstruction::Return],
-        constants: vec![],
-    };
-    let vm = VM {
-        callframes: vec![Callframe { ip: 0, chunk }],
-        stack: vec![],
-        built_ins: HashMap::new(),
-    };
-    assert_eq!(
-        run(vm),
-        Ok(VM {
-            callframes: vec![],
-            stack: vec![],
-            built_ins: HashMap::new(),
-        })
-    )
-}
-
-#[test]
 fn test_add() {
     let chunk = Chunk {
         code: vec![
@@ -125,38 +129,25 @@ fn test_add() {
 
     let callframe = Callframe { ip: 0, chunk };
 
-    let vm = VM {
-        callframes: vec![callframe],
-        stack: vec![],
-        built_ins: HashMap::new(),
-    };
+    let mut vm = get_initial_vm_and_chunk();
+    vm.callframes.push(callframe);
 
-    assert_eq!(
-        run(vm),
-        Ok(VM {
-            callframes: vec![],
-            stack: vec![Expr::Num(3.0)],
-            built_ins: HashMap::new(),
-        })
-    )
+    let result = run(vm);
+
+    debug_assert_eq!(result.map(|x| x.stack), Ok(vec![Expr::Num(3.0)],))
 }
 
-fn get_initial_vm_and_chunk() -> (VM, Chunk) {
-    let built_ins: HashMap<String, Vec<VMInstruction>> = HashMap::from([(
+fn get_initial_vm_and_chunk() -> VM {
+    let globals: HashMap<String, Expr> = HashMap::from([(
         "+".to_string(),
-        vec![VMInstruction::Add, VMInstruction::Return],
+        Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
     )]);
 
-    let chunk = Chunk {
-        code: vec![],
-        constants: vec![],
-    };
-    let vm = VM {
+    VM {
         callframes: vec![],
-        stack: vec![],
-        built_ins,
-    };
-    (vm, chunk)
+        stack: vec![Expr::BuiltIn(vec![])],
+        globals,
+    }
 }
 
 // just for tests
@@ -173,11 +164,14 @@ fn jit_run(input: String) -> Result<Expr, String> {
         e @ Err(_) => return e,
     };
 
-    let (mut vm, mut chunk) = get_initial_vm_and_chunk();
+    let mut vm = get_initial_vm_and_chunk();
 
+    let mut chunk = Chunk {
+        code: vec![],
+        constants: vec![],
+    };
     compile::compile(expr, &mut chunk);
 
-    print!("vm: {:?}", vm);
     let callframe = Callframe { ip: 0, chunk };
     vm.callframes.push(callframe);
 
@@ -189,8 +183,8 @@ fn jit_run(input: String) -> Result<Expr, String> {
     match interpreted.stack.get(0) {
         Some(top) if interpreted.stack.len() == 1 => Ok(top.clone()),
         _ => Result::Err(format!(
-            "expected one value on the stack, got {}",
-            interpreted.stack.len()
+            "expected one value on the stack, got {:#?}",
+            interpreted.stack
         )),
     }
 }

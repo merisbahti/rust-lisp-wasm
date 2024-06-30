@@ -1,4 +1,5 @@
 use crate::std_env::Env;
+use crate::vm::VMInstruction;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
@@ -14,6 +15,7 @@ pub enum Expr {
     Boolean(bool),
     Quote(Rc<Expr>),
     VMProc(usize),
+    BuiltIn(Vec<VMInstruction>),
     Proc(Arc<dyn Fn(&[Expr], &mut Env) -> Result<Expr, String>>),
 }
 
@@ -30,6 +32,7 @@ impl Display for Expr {
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
             Expr::Proc(_) => write!(formatter, "Proc(...)"),
             Expr::VMProc(_) => write!(formatter, "VMProc(...)"),
+            Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
     }
 }
