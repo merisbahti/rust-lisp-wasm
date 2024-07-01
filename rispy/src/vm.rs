@@ -32,29 +32,40 @@ pub struct Chunk {
 
 fn run(mut vm: VM) -> Result<VM, String> {
     loop {
-        let callframes = &mut vm.callframes;
-        let len = callframes.len();
-        let callframe = match callframes.get_mut(len - 1) {
-            Some(x) => x,
-            _ => return Err("no callframes".to_string()),
-        };
-        let chunk = &callframe.chunk;
-        let instruction = if let Some(instruction) = chunk.code.get(callframe.ip) {
-            instruction
-        } else {
-            return Err("End of code reached".to_string());
-        };
-        callframe.ip += 1;
-        match instruction {
-            VMInstruction::Lookup(name) => {
-                let instructions = match vm.globals.get(name) {
-                    Some(instructions) => instructions,
-                    None => return Err(format!("no built-in function found: {name}")),
-                };
-                vm.stack.push(instructions.clone());
+        match step(vm) {
+            err @ Err(_) => return err,
+            Ok(vm) if vm.callframes.len() == 0 => return Ok(vm),
+            Ok(new_vm) => {
+                vm = new_vm;
             }
-            VMInstruction::Call(arity) => {
-                let new_callframe = match vm.stack.get(vm.stack.len() - arity -1) {
+        }
+    }
+}
+
+fn step(mut vm: VM) -> Result<VM, String> {
+    let callframes = &mut vm.callframes;
+    let len = callframes.len();
+    let callframe = match callframes.get_mut(len - 1) {
+        Some(x) => x,
+        _ => return Err("no callframes".to_string()),
+    };
+    let chunk = &callframe.chunk;
+    let instruction = if let Some(instruction) = chunk.code.get(callframe.ip) {
+        instruction
+    } else {
+        return Err("End of code reached".to_string());
+    };
+    callframe.ip += 1;
+    match instruction {
+        VMInstruction::Lookup(name) => {
+            let instructions = match vm.globals.get(name) {
+                Some(instructions) => instructions,
+                None => return Err(format!("no built-in function found: {name}")),
+            };
+            vm.stack.push(instructions.clone());
+        }
+        VMInstruction::Call(arity) => {
+            let new_callframe = match vm.stack.get(vm.stack.len() - arity -1) {
                     Some(Expr::BuiltIn(instructions)) => Callframe {
                         ip: 0,
                         chunk: Chunk {
@@ -69,52 +80,51 @@ fn run(mut vm: VM) -> Result<VM, String> {
                     }
                 };
 
-                vm.callframes.push(new_callframe);
-            }
-            VMInstruction::Return => {
-                // remove fn from stack?
-                let rv = match (vm.stack.pop(), vm.stack.pop()) {
-                    (Some(rv), Some(Expr::BuiltIn(_))) => rv,
-                    (Some(_), Some(not_fn)) => {
-                        return Err(format!(
-                            "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
-                            not_fn, vm
-                        ))
-                    }
-                    _ => return Err(format!("too few args for return on stack: {:?}", vm)),
-                };
-                vm.stack.push(rv);
-
-                match callframes.pop() {
-                    Some(_) if callframes.len() == 0 => return Ok(vm.clone()),
-                    Some(_) => {}
-                    _ => {
-                        return Err("no callframes".to_string());
-                    }
+            vm.callframes.push(new_callframe);
+        }
+        VMInstruction::Return => {
+            // remove fn from stack?
+            let rv = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(rv), Some(Expr::BuiltIn(_))) => rv,
+                (Some(_), Some(not_fn)) => {
+                    return Err(format!(
+                        "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
+                        not_fn, vm
+                    ))
                 }
-            }
-            VMInstruction::Constant(arg) => {
-                if let Some(constant) = chunk.constants.get(arg.clone()) {
-                    vm.stack.push(constant.clone());
-                } else {
-                    return Err(format!("constant not found: {arg}"));
-                }
-            }
-            VMInstruction::Add => {
-                let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
-                    (Some(arg1), Some(arg2)) => (arg1, arg2),
-                    _ => return Err("too few args for add on stack".to_string()),
-                };
+                _ => return Err(format!("too few args for return on stack: {:?}", vm)),
+            };
+            vm.stack.push(rv);
 
-                match (arg1, arg2) {
-                    (Expr::Num(arg1), Expr::Num(arg2)) => vm.stack.push(Expr::Num(arg1 + arg2)),
-                    _ => return Err("addition requires two numbers".to_string()),
+            match callframes.pop() {
+                Some(_) if callframes.len() == 0 => return Ok(vm.clone()),
+                Some(_) => {}
+                _ => {
+                    return Err("no callframes".to_string());
                 }
             }
         }
-    }
-}
+        VMInstruction::Constant(arg) => {
+            if let Some(constant) = chunk.constants.get(arg.clone()) {
+                vm.stack.push(constant.clone());
+            } else {
+                return Err(format!("constant not found: {arg}"));
+            }
+        }
+        VMInstruction::Add => {
+            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(arg1), Some(arg2)) => (arg1, arg2),
+                _ => return Err("too few args for add on stack".to_string()),
+            };
 
+            match (arg1, arg2) {
+                (Expr::Num(arg1), Expr::Num(arg2)) => vm.stack.push(Expr::Num(arg1 + arg2)),
+                _ => return Err("addition requires two numbers".to_string()),
+            }
+        }
+    }
+    return Ok(vm.clone());
+}
 #[test]
 fn test_add() {
     let chunk = Chunk {
