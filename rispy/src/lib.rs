@@ -3,12 +3,11 @@ extern crate nom;
 extern crate wasm_bindgen;
 
 mod compile;
-mod eval;
 mod expr;
 mod parse;
-mod std_env;
 mod vm;
 use cfg_if::cfg_if;
+use vm::{prepare_vm, VM};
 use wasm_bindgen::prelude::*;
 
 cfg_if! {
@@ -27,10 +26,11 @@ extern "C" {
 // Export a `greet` function from Rust to JavaScript, that formats a
 // hello message.
 #[wasm_bindgen]
-pub fn evaluate_symbolic_string(expression: String) -> String {
-    let result = eval::eval_from_str(&expression);
+pub fn compile(expression: String) -> JsValue {
+    let result: Result<VM, String> = prepare_vm(expression);
+
     match result {
-        Ok(a) => format!("{a}"),
-        Err(e) => format!("Error: {}", e),
+        Ok(a) => serde_wasm_bindgen::to_value(&a).unwrap(),
+        Err(e) => JsValue::from_str(format!("{:?}", e).as_str()),
     }
 }

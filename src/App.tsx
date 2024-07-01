@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import logo from "./logo.svg";
 import "./App.css";
-import init, { evaluate_symbolic_string } from "rispy";
+import init, { compile } from "rispy";
 
 function App() {
   const [value, setValue] = React.useState("");
@@ -10,7 +10,7 @@ function App() {
   useEffect(() => {
     init()
       .then(() => {
-        setExpr(evaluate_symbolic_string(value));
+        setExpr(compile(value));
       })
       .catch((e) => setExpr(`An error occured: ${e.message}`));
   }, [init, value]);
@@ -34,7 +34,7 @@ function App() {
           }}
         >
           <div>result:</div>
-          <code>{expr}</code>
+          <code>{JSON.stringify(expr)}</code>
         </div>
       </header>
     </div>

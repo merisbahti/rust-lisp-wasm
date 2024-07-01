@@ -1,22 +1,19 @@
-use crate::std_env::Env;
 use crate::vm::VMInstruction;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
 use nom::lib::std::fmt::Formatter;
-use std::rc::Rc;
-use std::sync::Arc;
+use serde::Serialize;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum Expr {
     List(Vec<Expr>),
     Num(f64),
     Keyword(String),
     Boolean(bool),
-    Quote(Rc<Expr>),
+    Quote(Vec<Expr>),
     VMProc(usize),
     BuiltIn(Vec<VMInstruction>),
-    Proc(Arc<dyn Fn(&[Expr], &mut Env) -> Result<Expr, String>>),
 }
 
 impl Display for Expr {
@@ -30,7 +27,6 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::Proc(_) => write!(formatter, "Proc(...)"),
             Expr::VMProc(_) => write!(formatter, "VMProc(...)"),
             Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }

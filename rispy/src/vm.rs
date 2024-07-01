@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use serde::Serialize;
+
 use crate::{compile, expr::Expr, parse};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum VMInstruction {
     Lookup(String),
     Call(usize),
@@ -11,20 +13,20 @@ pub enum VMInstruction {
     Add,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 struct Callframe {
     ip: usize,
     chunk: Chunk,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct VM {
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct VM {
     callframes: Vec<Callframe>,
     stack: Vec<Expr>,
     globals: HashMap<String, Expr>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Chunk {
     pub code: Vec<VMInstruction>,
     pub constants: Vec<Expr>,
@@ -160,9 +162,7 @@ fn get_initial_vm_and_chunk() -> VM {
     }
 }
 
-// just for tests
-#[allow(dead_code)]
-fn jit_run(input: String) -> Result<Expr, String> {
+pub fn prepare_vm(input: String) -> Result<VM, String> {
     // parse, compile and run, then check what's left on the stack
     let parsed_expr = parse::parse(&input).and_then(|x| match x.first() {
         Some(res) if x.len() == 1 => Ok(res.clone()),
@@ -171,7 +171,7 @@ fn jit_run(input: String) -> Result<Expr, String> {
 
     let expr = match parsed_expr {
         Ok(expr) => expr,
-        e @ Err(_) => return e,
+        Err(err) => return Err(err),
     };
 
     let mut vm = get_initial_vm_and_chunk();
@@ -185,6 +185,17 @@ fn jit_run(input: String) -> Result<Expr, String> {
 
     let callframe = Callframe { ip: 0, chunk };
     vm.callframes.push(callframe);
+
+    return Ok(vm);
+}
+
+// just for tests
+#[allow(dead_code)]
+fn jit_run(input: String) -> Result<Expr, String> {
+    let vm = match prepare_vm(input) {
+        Ok(vm) => vm,
+        Err(err) => return Result::Err(err),
+    };
 
     let interpreted = match run(vm) {
         Ok(e) => e,

@@ -35,7 +35,7 @@ fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 
 fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(context("quote", preceded(tag("'"), parse_expr)), |exprs| {
-        Expr::Quote(Rc::new(exprs))
+        Expr::Quote(vec![exprs])
     })(i)
 }
 
@@ -85,7 +85,7 @@ fn test_parse_quote() {
 
     let borrowed = res.map(|x| x.get(0).cloned()).unwrap().unwrap();
     assert!(match borrowed {
-        Expr::Quote(rc) => match &*rc {
+        Expr::Quote(rc) => match rc.first().unwrap() {
             &Expr::List(ref v) if v.is_empty() => true,
             _ => false,
         },
@@ -95,7 +95,7 @@ fn test_parse_quote() {
     let res2 = parse("'(a b)").map(|x| x.get(0).cloned()).unwrap().unwrap();
 
     assert!(match res2 {
-        Expr::Quote(rc) => match &*rc {
+        Expr::Quote(rc) => match rc.first().unwrap() {
             &Expr::List(ref v)
                 if v.get(0).unwrap().clone() == Expr::Keyword("a".to_string())
                     && v.get(1).unwrap().clone() == Expr::Keyword("b".to_string()) =>
@@ -108,7 +108,7 @@ fn test_parse_quote() {
     let res3 = parse("'a").map(|x| x.get(0).cloned()).unwrap().unwrap();
 
     assert!(match res3 {
-        Expr::Quote(rc) => match &*rc {
+        Expr::Quote(rc) => match rc.first().unwrap() {
             &Expr::Keyword(ref kw) => kw == "a",
             _ => panic!("found: {:?}", rc),
         },

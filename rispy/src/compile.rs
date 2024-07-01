@@ -21,7 +21,6 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
         }
         Expr::Boolean(_) => todo!("Not yet implemented (boolean)"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
-        Expr::Proc(_) => panic!("Cannot compile a procedure"),
         Expr::VMProc(_) => panic!("Cannot compile a VMProc"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
     }
