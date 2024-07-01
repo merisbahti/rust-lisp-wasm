@@ -10,7 +10,6 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
                 compile(e.clone(), chunk);
             });
             chunk.code.push(VMInstruction::Call(exprs.len() - 1));
-            chunk.code.push(VMInstruction::Return);
         }
         nr @ Expr::Num(_) => {
             chunk.constants.push(nr);
@@ -51,7 +50,6 @@ fn test_simple_add_compilation() {
                 VMInstruction::Constant(0),
                 VMInstruction::Constant(1),
                 VMInstruction::Call(2),
-                VMInstruction::Return,
             ],
             constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
         }

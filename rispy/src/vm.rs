@@ -42,7 +42,6 @@ fn run(mut vm: VM) -> Result<VM, String> {
         let instruction = if let Some(instruction) = chunk.code.get(callframe.ip) {
             instruction
         } else {
-            println!("call called: {:#?}", vm);
             return Err("End of code reached".to_string());
         };
         callframe.ip += 1;
@@ -78,7 +77,8 @@ fn run(mut vm: VM) -> Result<VM, String> {
                     (Some(rv), Some(Expr::BuiltIn(_))) => rv,
                     (Some(_), Some(not_fn)) => {
                         return Err(format!(
-                            "expected fn on stack after returning, but found: {not_fn}",
+                            "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
+                            not_fn, vm
                         ))
                     }
                     _ => return Err(format!("too few args for return on stack: {:?}", vm)),
@@ -86,7 +86,7 @@ fn run(mut vm: VM) -> Result<VM, String> {
                 vm.stack.push(rv);
 
                 match callframes.pop() {
-                    Some(_) if callframes.len() == 0 => return Ok(vm),
+                    Some(_) if callframes.len() == 0 => return Ok(vm.clone()),
                     Some(_) => {}
                     _ => {
                         return Err("no callframes".to_string());
@@ -171,6 +171,7 @@ fn jit_run(input: String) -> Result<Expr, String> {
         constants: vec![],
     };
     compile::compile(expr, &mut chunk);
+    chunk.code.push(VMInstruction::Return);
 
     let callframe = Callframe { ip: 0, chunk };
     vm.callframes.push(callframe);
@@ -189,8 +190,20 @@ fn jit_run(input: String) -> Result<Expr, String> {
     }
 }
 
+fn maybe_log_err<T>(res: Result<T, String>) -> Result<T, String> {
+    match res {
+        Ok(res) => Ok(res),
+        Err(err) => {
+            println!("error: {}", err);
+            Err(err)
+        }
+    }
+}
+
 #[test]
 fn compiled_test() {
-    let res = jit_run("(+ 1 2)".to_string());
+    let res = maybe_log_err(jit_run("(+ 1 2)".to_string()));
     assert_eq!(res, Ok(Expr::Num(3.0)));
+    let res = maybe_log_err(jit_run("(+ 1 (+ 2 3))".to_string()));
+    assert_eq!(res, Ok(Expr::Num(6.0)));
 }
