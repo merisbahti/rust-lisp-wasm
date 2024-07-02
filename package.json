@@ -8,6 +8,7 @@
     "rsw:build": "rsw && npm run build"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.32.34",
     "react": "^17.0.0",
     "react-dom": "^17.0.0"
   },
