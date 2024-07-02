@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import logo from "./logo.svg";
 import "./App.css";
-import init, { compile } from "rispy";
+import init, { compile, step } from "rispy";
 import { Static, Type, ValueGuard } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
@@ -31,8 +31,8 @@ const VMInstructionSchema = Type.Union([
   Type.Object({
     Call: Type.Number()
   }),
-  Type.Literal("Return")
-])
+  Type.String()
+ ])
 type VMInstruction = Static<typeof VMInstructionSchema>
 
 const ExprSchema = Type.Union([
@@ -78,7 +78,11 @@ function App() {
       .catch((e) => setExpr(`An error occured: ${e.message}`));
   }, [init, value]);
 
+  console.log(expr)
   const deserializedResult = parseResult(expr)
+  if (deserializedResult.type == "error") {
+    console.error(JSON.stringify(deserializedResult.error))
+  }
 
   return (
     <div className="App">
@@ -98,9 +102,14 @@ function App() {
             gap: "8px",
           }}
         >
+          {deserializedResult.type === "success" ?
+
+            <button onClick={() => { setExpr(step(deserializedResult.value)) }}>step</button> : null
+
+          }
           <div>result:</div>
           {deserializedResult.type === "success" ?
-            <VMComponent vm={deserializedResult.value} /> : JSON.stringify(deserializedResult.error)}
+            <VMComponent vm={deserializedResult.value} /> : "Error, see browser console"}
 
         </div>
       </header>

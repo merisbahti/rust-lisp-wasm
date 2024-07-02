@@ -6,6 +6,7 @@ mod compile;
 mod expr;
 mod parse;
 mod vm;
+
 use cfg_if::cfg_if;
 use vm::{prepare_vm, VM};
 use wasm_bindgen::prelude::*;
@@ -30,6 +31,18 @@ pub fn compile(expression: String) -> JsValue {
     let result: Result<VM, String> = prepare_vm(expression);
 
     match result {
+        Ok(a) => serde_wasm_bindgen::to_value(&a).unwrap(),
+        Err(e) => JsValue::from_str(format!("{:?}", e).as_str()),
+    }
+}
+
+#[wasm_bindgen]
+pub fn step(expression: JsValue) -> JsValue {
+    let deserialized: Result<VM, String> = serde_wasm_bindgen::from_value(expression)
+        .map_err(|e| e.to_string())
+        .and_then(|x| vm::step(x));
+
+    match deserialized {
         Ok(a) => serde_wasm_bindgen::to_value(&a).unwrap(),
         Err(e) => JsValue::from_str(format!("{:?}", e).as_str()),
     }

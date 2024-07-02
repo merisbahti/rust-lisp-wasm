@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{compile, expr::Expr, parse};
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
     Lookup(String),
     Call(usize),
@@ -13,20 +13,20 @@ pub enum VMInstruction {
     Add,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Callframe {
     ip: usize,
     chunk: Chunk,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VM {
     callframes: Vec<Callframe>,
     stack: Vec<Expr>,
     globals: HashMap<String, Expr>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Chunk {
     pub code: Vec<VMInstruction>,
     pub constants: Vec<Expr>,
@@ -44,7 +44,7 @@ fn run(mut vm: VM) -> Result<VM, String> {
     }
 }
 
-fn step(mut vm: VM) -> Result<VM, String> {
+pub fn step(mut vm: VM) -> Result<VM, String> {
     let callframes = &mut vm.callframes;
     let len = callframes.len();
     let callframe = match callframes.get_mut(len - 1) {

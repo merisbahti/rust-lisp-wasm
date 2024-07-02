@@ -3,9 +3,10 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
 use nom::lib::std::fmt::Formatter;
+use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Expr {
     List(Vec<Expr>),
     Num(f64),
