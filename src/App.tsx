@@ -5,53 +5,50 @@ import init, { compile, step } from "rispy";
 import { Static, Type, ValueGuard } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
-
-
-
 const VMInstructionSchema = Type.Union([
   Type.Object({
-    Constant: Type.Number()
+    Constant: Type.Number(),
   }),
   Type.Object({
-    Lookup: Type.String()
+    Lookup: Type.String(),
   }),
   Type.Object({
-    Call: Type.Number()
+    Call: Type.Number(),
   }),
-  Type.String()
-])
-type VMInstruction = Static<typeof VMInstructionSchema>
+  Type.String(),
+]);
+type VMInstruction = Static<typeof VMInstructionSchema>;
 
 const ExprSchema = Type.Union([
   Type.Object({ Num: Type.Number() }),
-  Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) })
-])
+  Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
+]);
 
 const Callframe = Type.Object({
   ip: Type.Number(),
   chunk: Type.Object({
     code: Type.Array(VMInstructionSchema),
-    constants: Type.Array(ExprSchema)
-  })
-})
+    constants: Type.Array(ExprSchema),
+  }),
+});
 
 const VM = Type.Object({
-  callframes:
-    Type.Array(Callframe),
+  callframes: Type.Array(Callframe),
   stack: Type.Array(ExprSchema),
-  globals: Type.Record(Type.String(), ExprSchema)
-})
+  globals: Type.Record(Type.String(), ExprSchema),
+});
 
-type VMType = Static<typeof VM>
+type VMType = Static<typeof VM>;
 
-const parseResult = (result: unknown): { type: "success", value: VMType } | { type: "error", error: unknown } => {
+const parseResult = (
+  result: unknown,
+): { type: "success"; value: VMType } | { type: "error"; error: unknown } => {
   try {
-    return { type: "success", value: Value.Decode(VM, result) }
+    return { type: "success", value: Value.Decode(VM, result) };
   } catch (error) {
-    return { type: "error", error }
+    return { type: "error", error };
   }
-
-}
+};
 
 function App() {
   const [value, setValue] = React.useState("(+ 1 (+ 1 2)) ");
@@ -63,11 +60,11 @@ function App() {
         setExpr(compile(value));
       })
       .catch((e) => setExpr(`An error occured: ${e.message}`));
-  }, [init, value]);
+  }, [value]);
 
-  const deserializedResult = parseResult(expr)
+  const deserializedResult = parseResult(expr);
   if (deserializedResult.type == "error") {
-    console.error(JSON.stringify(deserializedResult.error))
+    console.error(JSON.stringify(deserializedResult.error));
   }
 
   return (
@@ -89,16 +86,23 @@ function App() {
                 gap: "8px",
               }}
             >
-              {deserializedResult.type === "success" ?
-
-                <button onClick={() => { setExpr(step(deserializedResult.value)) }}>step</button> : null
-
-              }
+              {deserializedResult.type === "success" ? (
+                <button
+                  onClick={() => {
+                    setExpr(step(deserializedResult.value));
+                  }}
+                >
+                  step
+                </button>
+              ) : null}
             </div>
           </div>
-        <div style={{marginLeft: "32px"}}>
-            {deserializedResult.type === "success" ?
-              <VMComponent vm={deserializedResult.value} /> : "Error, see browser console"}
+          <div style={{ marginLeft: "32px" }}>
+            {deserializedResult.type === "success" ? (
+              <VMComponent vm={deserializedResult.value} />
+            ) : (
+              "Error, see browser console"
+            )}
           </div>
         </div>
       </header>
@@ -106,41 +110,62 @@ function App() {
   );
 }
 
-const VMInstructionComp = ({ instr, active }: { instr: VMInstruction, active: boolean }) => {
+const VMInstructionComp = ({
+  instr,
+  active,
+}: {
+  instr: VMInstruction;
+  active: boolean;
+}) => {
   const formatted = React.useMemo(() => {
-    if (typeof instr === "string") return instr
+    if (typeof instr === "string") return instr;
 
+    const entries = Object.entries(instr)[0];
 
-    const entries = Object.entries(instr)[0]
+    return `${entries[0]}(${entries[1]})`;
+  }, [instr]);
 
-    return `${entries[0]}(${entries[1]})`
-
-  }, [instr])
-
-  return <div style={{ backgroundColor: active ? "green" : "grey", padding: "4px" }}>{formatted}</div>
-
-}
+  return (
+    <div style={{ backgroundColor: active ? "green" : "grey", padding: "4px" }}>
+      {formatted}
+    </div>
+  );
+};
 
 const VMComponent = ({ vm }: { vm: VMType }) => {
-  const callframeCount = vm.callframes.length
-  const reversedStack = [...vm.stack].reverse()
-  const reversedCallframes = [...vm.callframes].reverse()
+  const callframeCount = vm.callframes.length;
+  const reversedStack = [...vm.stack].reverse();
+  const reversedCallframes = [...vm.callframes].reverse();
 
-  return <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      {reversedStack.map(item => <div>{JSON.stringify(item)}</div>)}
+  return (
+    <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {reversedStack.map((item) => (
+          <div>{JSON.stringify(item)}</div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        {reversedCallframes.map((callframe, callFrameIndex) => {
+          const code = callframe.chunk.code;
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                gap: "16px",
+                opacity: callFrameIndex !== 0 ? "0.5" : "1",
+              }}
+            >
+              {code.map((c, i) => (
+                <VMInstructionComp instr={c} active={i === callframe.ip} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
-
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {reversedCallframes.map((callframe, callFrameIndex) => {
-        const code = callframe.chunk.code
-        return <div style={{ display: "flex", flexDirection: "row", gap: "16px", opacity: callFrameIndex !== 0 ? "0.5" : "1" }}>
-          {code.map((c, i) => <VMInstructionComp instr={c} active={i === callframe.ip} />)}
-        </div>
-      })}
-
-    </div>
-  </div>
-}
+  );
+};
 
 export default App;
