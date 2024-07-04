@@ -1,8 +1,7 @@
 import React, { useEffect } from "react";
-import logo from "./logo.svg";
 import "./App.css";
 import init, { compile, step } from "rispy";
-import { Static, Type, ValueGuard } from "@sinclair/typebox";
+import { Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
 const VMInstructionSchema = Type.Union([
@@ -63,7 +62,7 @@ function App() {
   }, [value]);
 
   const deserializedResult = parseResult(expr);
-  if (deserializedResult.type == "error") {
+  if (deserializedResult.type === "error") {
     console.error(JSON.stringify(deserializedResult.error));
   }
 
