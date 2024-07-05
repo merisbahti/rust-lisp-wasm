@@ -70,8 +70,15 @@ function App() {
     <div className="App">
       <header className="App-header">
         <div style={{ display: "flex", flexDirection: "row" }}>
-          <div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "end",
+            }}
+          >
             <textarea
+              style={{ fontSize: "32px" }}
               value={value}
               onChange={(e) => {
                 setValue(e.target.value);
@@ -131,8 +138,23 @@ const VMInstructionComp = ({
   );
 };
 
+const StackComp = ({ stackItem }: { stackItem: VMType["stack"][number] }) => {
+  const formatted = React.useMemo(() => {
+    if ("Num" in stackItem) {
+      return stackItem.Num;
+    } else if ("BuiltIn") {
+      return "fn";
+    }
+    return "unknown";
+  }, [stackItem]);
+  return (
+    <div style={{ backgroundColor: "grey", padding: "4px", minWidth: "200px" }}>
+      {formatted}
+    </div>
+  );
+};
+
 const VMComponent = ({ vm }: { vm: VMType }) => {
-  const callframeCount = vm.callframes.length;
   const reversedStack = [...vm.stack].reverse();
   const reversedCallframes = [...vm.callframes].reverse();
 
@@ -154,7 +176,7 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
       >
         {reversedStack.map((item) => (
           <div style={{ padding: "8px", backgroundColor: "grey" }}>
-            {JSON.stringify(item)}
+            <StackComp stackItem={item} />
           </div>
         ))}
       </div>
@@ -167,6 +189,7 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
               style={{
                 display: "flex",
                 flexDirection: "row",
+                flexWrap: "wrap",
                 gap: "16px",
                 opacity: callFrameIndex !== 0 ? "0.5" : "1",
               }}

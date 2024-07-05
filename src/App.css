@@ -15,7 +15,10 @@
 
 .App-header {
   background-color: #282c34;
+  padding-left: 8px;
+  padding-right: 8px;
   min-height: 100vh;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -32,6 +35,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

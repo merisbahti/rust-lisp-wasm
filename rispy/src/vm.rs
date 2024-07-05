@@ -227,4 +227,6 @@ fn compiled_test() {
     assert_eq!(res, Ok(Expr::Num(3.0)));
     let res = maybe_log_err(jit_run("(+ 1 (+ 2 3))".to_string()));
     assert_eq!(res, Ok(Expr::Num(6.0)));
+    let res = maybe_log_err(jit_run("(+ (+ 2 3) 1)".to_string()));
+    assert_eq!(res, Ok(Expr::Num(6.0)));
 }
