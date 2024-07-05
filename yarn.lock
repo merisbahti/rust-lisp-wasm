@@ -3382,6 +3382,10 @@ rimraf@^3.0.2:
   dependencies:
     glob "^7.1.3"
 
+"rispy@file:rispy/pkg":
+  version "0.1.0"
+  resolved "file:rispy/pkg"
+
 "rollup@>=2.59.0 <2.78.0":
   version "2.77.3"
   optionalDependencies:

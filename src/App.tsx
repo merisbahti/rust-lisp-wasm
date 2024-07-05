@@ -137,10 +137,25 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
   const reversedCallframes = [...vm.callframes].reverse();
 
   return (
-    <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
-      <div style={{ display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        gap: "16px",
+        height: "80vh",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+        }}
+      >
         {reversedStack.map((item) => (
-          <div>{JSON.stringify(item)}</div>
+          <div style={{ padding: "8px", backgroundColor: "grey" }}>
+            {JSON.stringify(item)}
+          </div>
         ))}
       </div>
 
