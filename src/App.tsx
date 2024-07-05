@@ -174,8 +174,8 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
           gap: "8px",
         }}
       >
-        {reversedStack.map((item) => (
-          <div style={{ padding: "8px", backgroundColor: "grey" }}>
+        {reversedStack.map((item, index) => (
+          <div key={index} style={{ padding: "8px", backgroundColor: "grey" }}>
             <StackComp stackItem={item} />
           </div>
         ))}
@@ -186,6 +186,7 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
           const code = callframe.chunk.code;
           return (
             <div
+              key={callFrameIndex}
               style={{
                 display: "flex",
                 flexDirection: "row",
@@ -195,7 +196,11 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
               }}
             >
               {code.map((c, i) => (
-                <VMInstructionComp instr={c} active={i === callframe.ip} />
+                <VMInstructionComp
+                  key={i}
+                  instr={c}
+                  active={i === callframe.ip}
+                />
               ))}
             </div>
           );

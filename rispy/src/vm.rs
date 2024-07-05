@@ -150,10 +150,16 @@ fn test_add() {
 }
 
 fn get_initial_vm_and_chunk() -> VM {
-    let globals: HashMap<String, Expr> = HashMap::from([(
-        "+".to_string(),
-        Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
-    )]);
+    let globals: HashMap<String, Expr> = HashMap::from([
+        (
+            "+".to_string(),
+            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
+        ),
+        (
+            "lambda".to_string(),
+            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
+        ),
+    ]);
 
     VM {
         callframes: vec![],
