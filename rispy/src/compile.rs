@@ -5,21 +5,24 @@ use crate::{
 
 pub fn compile(expr: Expr, chunk: &mut Chunk) {
     match expr {
-        Expr::Pair(l, r) => {
-            compile(*l, chunk);
-            compile(*r, chunk);
+        Expr::Pair(box l, box r) => {
+            compile(l, chunk);
+            compile(r, chunk);
         }
         nr @ Expr::Num(_) => {
             chunk.constants.push(nr);
             let index = chunk.constants.len() - 1;
             chunk.code.push(VMInstruction::Constant(index));
         }
+        bool @ Expr::Boolean(_) => {
+            chunk.constants.push(bool);
+            let index = chunk.constants.len() - 1;
+            chunk.code.push(VMInstruction::Constant(index));
+        }
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw));
         }
-        Expr::Boolean(_) => todo!("Not yet implemented (boolean)"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
-        Expr::VMProc(_) => panic!("Cannot compile a VMProc"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
             chunk.code.push(VMInstruction::Call(2));

@@ -14,7 +14,6 @@ pub enum Expr {
     Boolean(bool),
     Quote(Box<Expr>),
     Nil,
-    VMProc(usize),
     BuiltIn(Vec<VMInstruction>),
 }
 
@@ -30,7 +29,6 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::VMProc(_) => write!(formatter, "VMProc(...)"),
             Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
     }
