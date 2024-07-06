@@ -14,7 +14,7 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Box<Expr>),
-    Lambda(Chunk),
+    Lambda(Chunk, Vec<String>),
     Nil,
     BuiltIn(Vec<VMInstruction>),
 }
@@ -31,7 +31,7 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::Lambda(xs) => write!(formatter, "Lambda({xs:?})"),
+            Expr::Lambda(xs, vars) => write!(formatter, "Lambda({xs:?}, {vars:?})"),
             Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
     }
@@ -73,7 +73,7 @@ impl PartialEq for Expr {
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,
-            (Expr::Lambda(c1), Expr::Lambda(c2)) => c1 == c2,
+            (Expr::Lambda(c1, s1), Expr::Lambda(c2, s2)) => c1 == c2 && s1 == s2,
             _ => false,
         }
     }

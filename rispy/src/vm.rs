@@ -17,6 +17,7 @@ pub enum VMInstruction {
 struct Callframe {
     ip: usize,
     chunk: Chunk,
+    env: HashMap<String, Expr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,31 +61,48 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
     callframe.ip += 1;
     match instruction {
         VMInstruction::Lookup(name) => {
-            let instructions = match vm.globals.get(name) {
+            let lookup = match callframe.env.get(name).or(vm.globals.get(name)) {
                 Some(instructions) => instructions,
-                None => return Err(format!("no built-in function found: {name}")),
+                None => return Err(format!("not found: {name}")),
             };
-            vm.stack.push(instructions.clone());
+            vm.stack.push(lookup.clone());
         }
         VMInstruction::Call(arity) => {
-            let new_callframe = match vm.stack.get(vm.stack.len() - arity -1) {
-                    Some(Expr::BuiltIn(instructions)) => Callframe {
-                        ip: 0,
-                        chunk: Chunk {
-                            code: instructions.clone(),
-                            constants: vec![],
-                        },
+            let stack_len = vm.stack.len();
+            let first = vm.stack.get(stack_len - arity - 1).cloned();
+
+            let new_callframe = match first {
+                Some(Expr::BuiltIn(instructions)) => Callframe {
+                    ip: 0,
+                    chunk: Chunk {
+                        code: instructions.clone(),
+                        constants: vec![],
                     },
-                    Some(Expr::Lambda(chunk)) => Callframe {
+                    env: HashMap::new(),
+                },
+                Some(Expr::Lambda(chunk, vars)) => {
+                    let x = vm
+                        .stack
+                        .drain(stack_len - arity..stack_len)
+                        .collect::<Vec<Expr>>();
+                    let env = vars
+                        .iter()
+                        .map(|x| x.clone())
+                        .zip(x.clone())
+                        .collect::<HashMap<String, Expr>>();
+                    Callframe {
                         ip: 0,
                         chunk: chunk.to_owned(),
-                    },
-                    found => {
-                        return Err(
-                            format!("no function to call on stack (can only handle builtins for now), found: {:?}, \nstack:{:?}", found, vm.stack)
-                        )
+                        env,
                     }
-                };
+                }
+                found => {
+                    return Err(format!(
+                        "no function to call on stack, found: {:?}, \nstack:{:?}",
+                        found, vm.stack
+                    ))
+                }
+            };
 
             vm.callframes.push(new_callframe);
         }
@@ -92,7 +110,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
             // remove fn from stack?
             let rv = match (vm.stack.pop(), vm.stack.pop()) {
                 (Some(rv), Some(Expr::BuiltIn(_))) => rv,
-                (Some(rv), Some(Expr::Lambda(_))) => rv,
+                (Some(rv), Some(Expr::Lambda(_, _))) => rv,
                 (Some(_), Some(not_fn)) => {
                     return Err(format!(
                         "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
@@ -121,7 +139,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
         VMInstruction::Add => {
             let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
                 (Some(arg1), Some(arg2)) => (arg1, arg2),
-                _ => return Err("too few args for add on stack".to_string()),
+                _ => return Err(format!("too few args for add on stack {:?}", vm.stack)),
             };
 
             match (arg1, arg2) {
@@ -144,7 +162,12 @@ fn test_add() {
         constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
     };
 
-    let callframe = Callframe { ip: 0, chunk };
+    let callframe = Callframe {
+        ip: 0,
+        chunk,
+
+        env: HashMap::new(),
+    };
 
     let mut vm = get_initial_vm_and_chunk();
     vm.callframes.push(callframe);
@@ -197,7 +220,11 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
     };
     chunk.code.push(VMInstruction::Return);
 
-    let callframe = Callframe { ip: 0, chunk };
+    let callframe = Callframe {
+        ip: 0,
+        chunk,
+        env: HashMap::new(),
+    };
     vm.callframes.push(callframe);
 
     return Ok(vm);
@@ -245,4 +272,6 @@ fn compiled_test() {
     assert_eq!(res, Ok(Expr::Num(6.0)));
     let res = maybe_log_err(jit_run("((lambda () 1))".to_string()));
     assert_eq!(res, Ok(Expr::Num(1.0)));
+    let res = maybe_log_err(jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string()));
+    assert_eq!(res, Ok(Expr::Num(5.0)));
 }

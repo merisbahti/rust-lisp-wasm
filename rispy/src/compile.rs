@@ -57,7 +57,7 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     };
     body_compiled.code.push(VMInstruction::Return);
 
-    chunk.constants.push(Expr::Lambda(body_compiled));
+    chunk.constants.push(Expr::Lambda(body_compiled, kws));
     chunk
         .code
         .push(VMInstruction::Constant(chunk.constants.len() - 1));
@@ -90,7 +90,7 @@ pub fn compile_internal(
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw));
         }
-        Expr::Lambda(_) => panic!("Cannot compile a Lambda"),
+        Expr::Lambda(_, _) => panic!("Cannot compile a Lambda"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
@@ -230,10 +230,13 @@ fn lambda_compile_test() {
         parse_and_compile("(lambda () 1)"),
         Chunk {
             code: vec![VMInstruction::Constant(0)],
-            constants: vec![Expr::Lambda(Chunk {
-                code: vec![VMInstruction::Constant(0), VMInstruction::Return],
-                constants: vec![Expr::Num(1.0)]
-            })]
+            constants: vec![Expr::Lambda(
+                Chunk {
+                    code: vec![VMInstruction::Constant(0), VMInstruction::Return],
+                    constants: vec![Expr::Num(1.0)]
+                },
+                vec![]
+            ),]
         }
     );
     println!("make lambda and call");
@@ -242,10 +245,13 @@ fn lambda_compile_test() {
         parse_and_compile("((lambda () 1))"),
         Chunk {
             code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
-            constants: vec![Expr::Lambda(Chunk {
-                code: vec![VMInstruction::Constant(0), VMInstruction::Return],
-                constants: vec![Expr::Num(1.0)]
-            })]
+            constants: vec![Expr::Lambda(
+                Chunk {
+                    code: vec![VMInstruction::Constant(0), VMInstruction::Return],
+                    constants: vec![Expr::Num(1.0)]
+                },
+                vec![]
+            )]
         }
     );
 }

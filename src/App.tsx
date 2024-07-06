@@ -23,10 +23,13 @@ const ExprSchema = Type.Recursive((This) =>
     Type.Object({ Num: Type.Number() }),
     Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
     Type.Object({
-      Lambda: Type.Object({
-        code: Type.Array(VMInstructionSchema),
-        constants: Type.Array(This),
-      }),
+      Lambda: Type.Tuple([
+        Type.Object({
+          code: Type.Array(VMInstructionSchema),
+          constants: Type.Array(This),
+        }),
+        Type.Array(Type.String()),
+      ]),
     }),
   ]),
 );
@@ -61,7 +64,9 @@ const parseResult = (
 };
 
 function App() {
-  const [value, setValue] = React.useState("((lambda () 1))");
+  const [value, setValue] = React.useState(
+    "((lambda (a b) (+ a (+ b b))) 1 2)",
+  );
   const [expr, setExpr] = React.useState<unknown>(null);
 
   useEffect(() => {
