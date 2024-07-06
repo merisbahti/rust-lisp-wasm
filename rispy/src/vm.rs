@@ -186,7 +186,10 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
         code: vec![],
         constants: vec![],
     };
-    compile::compile(expr, &mut chunk);
+    match compile::compile(expr, &mut chunk) {
+        Ok(_) => {}
+        Err(e) => panic!("{:?}", e),
+    };
     chunk.code.push(VMInstruction::Return);
 
     let callframe = Callframe { ip: 0, chunk };

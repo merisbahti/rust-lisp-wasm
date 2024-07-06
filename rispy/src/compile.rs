@@ -1,26 +1,67 @@
+use std::borrow::Borrow;
+
 use crate::{
     expr::Expr,
     vm::{Chunk, VMInstruction},
 };
 
-pub fn compile(expr: Expr, chunk: &mut Chunk) {
-    compile_internal(expr, chunk, None);
+pub fn compile(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+    return compile_internal(expr, chunk, None);
 }
 
-fn make_lambda(expr: Expr, chunk: &mut Chunk) {
-    // check function arity
-    // traverse body to get closed-over variables and build instructions
-    todo!("Not yet implemented (lambda)");
+fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
+    match expr {
+        Expr::Pair(box Expr::Keyword(kw), box rest) => collect_kws_from_expr(rest).map(|mut x| {
+            x.insert(0, kw.clone());
+            x
+        }),
+        Expr::Nil => Ok(vec![]),
+        _ => Err(format!("Invalid keyword list: {:?}", expr)),
+    }
 }
 
-pub fn compile_internal(expr: Expr, chunk: &mut Chunk, calling_context: Option<usize>) {
+fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+    let (pairs, body) = match expr {
+        Expr::Pair(pairs @ box Expr::Nil, box body) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Pair(_, _), box body) => (pairs, body),
+        otherwise @ _ => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
+    };
+
+    let kws = match collect_kws_from_expr(pairs.borrow()) {
+        Ok(kws) => kws,
+        Err(e) => return Err(format!("{:?}", e)),
+    };
+
+    let mut new_body_chunk = Chunk {
+        code: vec![],
+        constants: vec![],
+    };
+
+    let body_compiled = match compile(body, &mut new_body_chunk) {
+        Ok(chunk) => chunk,
+        err @ Err(_) => return err,
+    };
+
+    chunk.constants.push(Expr::Lambda(body_compiled));
+    chunk
+        .code
+        .push(VMInstruction::Constant(chunk.constants.len() - 1));
+    Ok(chunk.clone())
+}
+
+pub fn compile_internal(
+    expr: Expr,
+    chunk: &mut Chunk,
+    calling_context: Option<usize>,
+) -> Result<Chunk, String> {
     match expr {
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda".to_string() => {
-            make_lambda(r, chunk)
+            return make_lambda(r, chunk);
         }
         Expr::Pair(box l, box r) => {
-            compile_internal(l, chunk, None);
-            compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));
+            println!("compiling pair: {:?} {:?}", l, r);
+            let _ = compile_internal(l, chunk, None);
+            let _ = compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));
         }
         nr @ Expr::Num(_) => {
             chunk.constants.push(nr);
@@ -35,15 +76,17 @@ pub fn compile_internal(expr: Expr, chunk: &mut Chunk, calling_context: Option<u
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw));
         }
+        Expr::Lambda(_) => panic!("Cannot compile a Lambda"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
             match calling_context {
                 Some(calls) => chunk.code.push(VMInstruction::Call(calls)),
-                None => return,
+                None => {}
             };
         }
-    }
+    };
+    Ok(chunk.clone())
 }
 
 #[test]
@@ -53,14 +96,17 @@ fn test_simple_add_compilation() {
         constants: vec![],
     };
 
-    compile(
+    match compile(
         crate::parse::make_pair_from_vec(vec![
             Expr::Keyword("+".to_string()),
             Expr::Num(1.0),
             Expr::Num(2.0),
         ]),
         &mut initial_chunk,
-    );
+    ) {
+        Ok(_) => {}
+        Err(e) => panic!("Error: {:?}", e),
+    };
     assert_eq!(
         initial_chunk,
         Chunk {
@@ -83,8 +129,10 @@ fn losta_compile() {
             code: vec![],
             constants: vec![],
         };
-        compile(expr, &mut chunk);
-        chunk.code
+        match compile(expr, &mut chunk) {
+            Ok(e) => return e.code,
+            Err(e) => panic!("Error: {:?}", e),
+        }
     }
 
     assert_eq!(
@@ -144,10 +192,46 @@ fn losta_compile() {
     );
 
     assert_eq!(
+        parse_and_compile("((lambda () 1))"),
+        vec![VMInstruction::Constant(0), VMInstruction::Call(0)]
+    );
+}
+
+#[test]
+fn lambda_compile_test() {
+    fn parse_and_compile(input: &str) -> Chunk {
+        let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
+        let mut chunk = Chunk {
+            code: vec![],
+            constants: vec![],
+        };
+        match compile(expr, &mut chunk) {
+            Ok(e) => return e,
+            Err(e) => panic!("Error: {:?}", e),
+        }
+    }
+
+    println!("make lambda");
+    assert_eq!(
         parse_and_compile("(lambda () 1)"),
-        vec![
-            VMInstruction::Lookup("f".to_string()),
-            VMInstruction::Call(0)
-        ]
+        Chunk {
+            code: vec![VMInstruction::Constant(0)],
+            constants: vec![Expr::Lambda(Chunk {
+                code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
+                constants: vec![Expr::Num(1.0)]
+            })]
+        }
+    );
+    println!("make lambda and call");
+
+    assert_eq!(
+        parse_and_compile("((lambda () 1))"),
+        Chunk {
+            code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
+            constants: vec![Expr::Lambda(Chunk {
+                code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
+                constants: vec![Expr::Num(1.0)]
+            })]
+        }
     );
 }
