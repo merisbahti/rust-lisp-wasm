@@ -7,8 +7,17 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
     compile_internal(expr, chunk, None);
 }
 
+fn make_lambda(expr: Expr, chunk: &mut Chunk) {
+    // check function arity
+    // traverse body to get closed-over variables and build instructions
+    todo!("Not yet implemented (lambda)");
+}
+
 pub fn compile_internal(expr: Expr, chunk: &mut Chunk, calling_context: Option<usize>) {
     match expr {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda".to_string() => {
+            make_lambda(r, chunk)
+        }
         Expr::Pair(box l, box r) => {
             compile_internal(l, chunk, None);
             compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));
@@ -128,6 +137,14 @@ fn losta_compile() {
     assert_eq!(parse_and_compile("()"), vec![]);
     assert_eq!(
         parse_and_compile("(f)"),
+        vec![
+            VMInstruction::Lookup("f".to_string()),
+            VMInstruction::Call(0)
+        ]
+    );
+
+    assert_eq!(
+        parse_and_compile("(lambda () 1)"),
         vec![
             VMInstruction::Lookup("f".to_string()),
             VMInstruction::Call(0)
