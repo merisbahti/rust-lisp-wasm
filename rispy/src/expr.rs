@@ -8,11 +8,12 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Expr {
-    List(Vec<Expr>),
+    Pair(Box<Expr>, Box<Expr>),
     Num(f64),
     Keyword(String),
     Boolean(bool),
-    Quote(Vec<Expr>),
+    Quote(Box<Expr>),
+    Nil,
     VMProc(usize),
     BuiltIn(Vec<VMInstruction>),
 }
@@ -23,7 +24,8 @@ impl Display for Expr {
         formatter: &mut std::fmt::Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            Expr::List(x) => write!(formatter, "List({x:?})"),
+            Expr::Nil => write!(formatter, "'()"),
+            Expr::Pair(x, y) => write!(formatter, "Pair({x:?}, {y:?})"),
             Expr::Num(x) => write!(formatter, "Num({x:?})"),
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
@@ -42,17 +44,17 @@ fn test_display() {
     let bool_expr_2 = Expr::Boolean(false);
     assert_eq!(format!("{bool_expr_2}"), "Boolean(false)");
 
-    let empty_list = Expr::List(vec![]);
-    assert_eq!(format!("{empty_list}"), "List([])");
+    let empty_list = crate::parse::make_pair_from_vec(vec![]);
+    assert_eq!(format!("{empty_list}"), "'()");
 
-    let list_with_values = Expr::List(vec![
+    let list_with_values = crate::parse::make_pair_from_vec(vec![
         Expr::Boolean(false),
         Expr::Num(5.0),
-        Expr::List(vec![Expr::Keyword("hello".to_string())]),
+        crate::parse::make_pair_from_vec(vec![Expr::Keyword("hello".to_string())]),
     ]);
     assert_eq!(
         format!("{list_with_values}"),
-        "List([Boolean(false), Num(5.0), List([Keyword(\"hello\")])])"
+        "Pair(Boolean(false), Pair(Num(5.0), Pair(Pair(Keyword(\"hello\"), '()), '())))"
     );
 }
 
@@ -65,10 +67,11 @@ impl Debug for Expr {
 impl PartialEq for Expr {
     fn eq(&self, rhs: &Expr) -> bool {
         match (self, rhs) {
-            (Expr::List(xs), Expr::List(ys)) => xs == ys,
+            (Expr::Pair(ax, ay), Expr::Pair(bx, by)) => ax == bx && ay == by,
             (Expr::Num(l), Expr::Num(r)) if l == r => true,
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
+            (Expr::Nil, Expr::Nil) => true,
             _ => false,
         }
     }

@@ -5,11 +5,9 @@ use crate::{
 
 pub fn compile(expr: Expr, chunk: &mut Chunk) {
     match expr {
-        Expr::List(exprs) => {
-            exprs.iter().for_each(|e| {
-                compile(e.clone(), chunk);
-            });
-            chunk.code.push(VMInstruction::Call(exprs.len() - 1));
+        Expr::Pair(l, r) => {
+            compile(*l, chunk);
+            compile(*r, chunk);
         }
         nr @ Expr::Num(_) => {
             chunk.constants.push(nr);
@@ -23,6 +21,9 @@ pub fn compile(expr: Expr, chunk: &mut Chunk) {
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::VMProc(_) => panic!("Cannot compile a VMProc"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
+        Expr::Nil => {
+            chunk.code.push(VMInstruction::Call(2));
+        }
     }
 }
 
@@ -34,7 +35,7 @@ fn test_simple_add_compilation() {
     };
 
     compile(
-        Expr::List(vec![
+        crate::parse::make_pair_from_vec(vec![
             Expr::Keyword("+".to_string()),
             Expr::Num(1.0),
             Expr::Num(2.0),

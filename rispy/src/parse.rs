@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use nom::bytes::complete::is_not;
 use nom::multi::many1;
 use nom::number::complete::double;
@@ -26,16 +24,26 @@ fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     })(i)
 }
 
+pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
+    match v.split_first() {
+        Some((head, tail)) => Expr::Pair(
+            Box::new(head.clone()),
+            Box::new(make_pair_from_vec(tail.to_vec()).clone()),
+        ),
+        None => Expr::Nil,
+    }
+}
+
 fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("list", delimited(char('('), many0(parse_expr), char(')'))),
-        Expr::List,
+        make_pair_from_vec,
     )(i)
 }
 
 fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(context("quote", preceded(tag("'"), parse_expr)), |exprs| {
-        Expr::Quote(vec![exprs])
+        Expr::Quote(Box::new(exprs))
     })(i)
 }
 
@@ -85,21 +93,18 @@ fn test_parse_quote() {
 
     let borrowed = res.map(|x| x.get(0).cloned()).unwrap().unwrap();
     assert!(match borrowed {
-        Expr::Quote(rc) => match rc.first().unwrap() {
-            &Expr::List(ref v) if v.is_empty() => true,
-            _ => false,
-        },
+        Expr::Quote(box Expr::Nil) => true,
         _ => false,
     });
 
     let res2 = parse("'(a b)").map(|x| x.get(0).cloned()).unwrap().unwrap();
 
     assert!(match res2 {
-        Expr::Quote(rc) => match rc.first().unwrap() {
-            &Expr::List(ref v)
-                if v.get(0).unwrap().clone() == Expr::Keyword("a".to_string())
-                    && v.get(1).unwrap().clone() == Expr::Keyword("b".to_string()) =>
-                true,
+        Expr::Quote(box rc) => match rc {
+            Expr::Pair(
+                box Expr::Keyword(a),
+                box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
+            ) => a == "a".to_string() && b == "b".to_string(),
             _ => false,
         },
         _ => false,
@@ -108,8 +113,8 @@ fn test_parse_quote() {
     let res3 = parse("'a").map(|x| x.get(0).cloned()).unwrap().unwrap();
 
     assert!(match res3 {
-        Expr::Quote(rc) => match rc.first().unwrap() {
-            &Expr::Keyword(ref kw) => kw == "a",
+        Expr::Quote(box rc) => match rc {
+            Expr::Keyword(kw) => kw == "a",
             _ => panic!("found: {:?}", rc),
         },
         _ => panic!("found: {:?}", res3),
@@ -119,18 +124,23 @@ fn test_parse_quote() {
 #[test]
 fn test_parse_lists() {
     fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
-        Ok(vec![Expr::List(
-            strings
-                .iter()
-                .map(|x| Expr::Keyword(x.to_string()))
-                .collect(),
-        )])
+        let stuff: Vec<Expr> = strings
+            .iter()
+            .map(|x| Expr::Keyword(x.to_string()))
+            .collect();
+        Ok(vec![make_pair_from_vec(stuff)])
     }
-    assert_eq!(parse("(a)"), ok_list(vec!("a")));
-    assert_eq!(parse("(123)"), Ok(vec![Expr::List(vec![Expr::Num(123.)])]));
+    assert_eq!(parse("(a)"), ok_list(vec!(("a"))));
+    assert_eq!(
+        parse("(123)"),
+        Ok(vec![Expr::Pair(
+            Box::new(Expr::Num(123.)),
+            Box::new(Expr::Nil)
+        )])
+    );
     assert_eq!(
         parse("(     a         1       b          2      )"),
-        Ok(vec![Expr::List(vec![
+        Ok(vec![make_pair_from_vec(vec![
             Expr::Keyword("a".to_string()),
             Expr::Num(1.),
             Expr::Keyword("b".to_string()),
@@ -139,9 +149,9 @@ fn test_parse_lists() {
     );
     assert_eq!(
         parse("(     a         (wat    woo    wii)       b          2      )"),
-        Ok(vec![Expr::List(vec![
+        Ok(vec![make_pair_from_vec(vec![
             Expr::Keyword("a".to_string()),
-            Expr::List(vec!(
+            make_pair_from_vec(vec!(
                 Expr::Keyword("wat".to_string()),
                 Expr::Keyword("woo".to_string()),
                 Expr::Keyword("wii".to_string())

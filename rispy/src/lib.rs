@@ -1,3 +1,4 @@
+#![feature(box_patterns)]
 extern crate cfg_if;
 extern crate nom;
 extern crate wasm_bindgen;
