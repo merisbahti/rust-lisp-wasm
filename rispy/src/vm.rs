@@ -75,6 +75,10 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                             constants: vec![],
                         },
                     },
+                    Some(Expr::Lambda(chunk)) => Callframe {
+                        ip: 0,
+                        chunk: chunk.to_owned(),
+                    },
                     found => {
                         return Err(
                             format!("no function to call on stack (can only handle builtins for now), found: {:?}, \nstack:{:?}", found, vm.stack)
@@ -88,6 +92,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
             // remove fn from stack?
             let rv = match (vm.stack.pop(), vm.stack.pop()) {
                 (Some(rv), Some(Expr::BuiltIn(_))) => rv,
+                (Some(rv), Some(Expr::Lambda(_))) => rv,
                 (Some(_), Some(not_fn)) => {
                     return Err(format!(
                         "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
@@ -238,4 +243,6 @@ fn compiled_test() {
     assert_eq!(res, Ok(Expr::Num(6.0)));
     let res = maybe_log_err(jit_run("(+ (+ 2 3) 1)".to_string()));
     assert_eq!(res, Ok(Expr::Num(6.0)));
+    let res = maybe_log_err(jit_run("((lambda () 1))".to_string()));
+    assert_eq!(res, Ok(Expr::Num(1.0)));
 }

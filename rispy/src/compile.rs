@@ -20,11 +20,25 @@ fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     }
 }
 
+fn collect_exprs_from_body(expr: &Expr) -> Result<Expr, String> {
+    match expr {
+        Expr::Pair(box expr, box Expr::Nil) => return Ok(expr.to_owned()),
+        _ => Err(format!(
+            "Can only compile lambdas with one expr in body, but found: {:?}",
+            expr
+        )),
+    }
+}
 fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
-    let (pairs, body) = match expr {
+    let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, box body) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(_, _), box body) => (pairs, body),
         otherwise @ _ => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
+    };
+
+    let body = match collect_exprs_from_body(&unextracted_body) {
+        Ok(res) => res,
+        Err(e) => return Err(e),
     };
 
     let kws = match collect_kws_from_expr(pairs.borrow()) {
@@ -37,10 +51,11 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         constants: vec![],
     };
 
-    let body_compiled = match compile(body, &mut new_body_chunk) {
+    let mut body_compiled = match compile(body.clone(), &mut new_body_chunk) {
         Ok(chunk) => chunk,
         err @ Err(_) => return err,
     };
+    body_compiled.code.push(VMInstruction::Return);
 
     chunk.constants.push(Expr::Lambda(body_compiled));
     chunk
@@ -59,7 +74,6 @@ pub fn compile_internal(
             return make_lambda(r, chunk);
         }
         Expr::Pair(box l, box r) => {
-            println!("compiling pair: {:?} {:?}", l, r);
             let _ = compile_internal(l, chunk, None);
             let _ = compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));
         }
@@ -217,7 +231,7 @@ fn lambda_compile_test() {
         Chunk {
             code: vec![VMInstruction::Constant(0)],
             constants: vec![Expr::Lambda(Chunk {
-                code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
+                code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                 constants: vec![Expr::Num(1.0)]
             })]
         }
@@ -229,7 +243,7 @@ fn lambda_compile_test() {
         Chunk {
             code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
             constants: vec![Expr::Lambda(Chunk {
-                code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
+                code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                 constants: vec![Expr::Num(1.0)]
             })]
         }

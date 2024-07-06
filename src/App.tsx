@@ -18,17 +18,28 @@ const VMInstructionSchema = Type.Union([
 ]);
 type VMInstruction = Static<typeof VMInstructionSchema>;
 
-const ExprSchema = Type.Union([
-  Type.Object({ Num: Type.Number() }),
-  Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
-]);
+const ExprSchema = Type.Recursive((This) =>
+  Type.Union([
+    Type.Object({ Num: Type.Number() }),
+    Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
+    Type.Object({
+      Lambda: Type.Object({
+        code: Type.Array(VMInstructionSchema),
+        constants: Type.Array(This),
+      }),
+    }),
+  ]),
+);
 
-const Callframe = Type.Object({
-  ip: Type.Number(),
-  chunk: Type.Object({
+const ChunkSchema = Type.Recursive((_) =>
+  Type.Object({
     code: Type.Array(VMInstructionSchema),
     constants: Type.Array(ExprSchema),
   }),
+);
+const Callframe = Type.Object({
+  ip: Type.Number(),
+  chunk: ChunkSchema,
 });
 
 const VM = Type.Object({
@@ -50,7 +61,7 @@ const parseResult = (
 };
 
 function App() {
-  const [value, setValue] = React.useState("(+ 1 (+ 1 2)) ");
+  const [value, setValue] = React.useState("((lambda () 1))");
   const [expr, setExpr] = React.useState<unknown>(null);
 
   useEffect(() => {
@@ -61,8 +72,9 @@ function App() {
       .catch((e) => setExpr(`An error occured: ${e.message}`));
   }, [value]);
 
-  const deserializedResult = parseResult(expr);
-  if (deserializedResult.type === "error") {
+  const deserializedResult = expr !== null ? parseResult(expr) : null;
+  if (deserializedResult && deserializedResult.type === "error") {
+    console.error("failed when serializing:", deserializedResult);
     console.error(JSON.stringify(deserializedResult.error));
   }
 
@@ -92,7 +104,7 @@ function App() {
                 gap: "8px",
               }}
             >
-              {deserializedResult.type === "success" ? (
+              {deserializedResult?.type === "success" ? (
                 <button
                   onClick={() => {
                     setExpr(step(deserializedResult.value));
@@ -104,7 +116,7 @@ function App() {
             </div>
           </div>
           <div style={{ marginLeft: "32px" }}>
-            {deserializedResult.type === "success" ? (
+            {deserializedResult?.type === "success" ? (
               <VMComponent vm={deserializedResult.value} />
             ) : (
               "Error, see browser console"
