@@ -16,10 +16,16 @@ pub enum VMInstruction {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct Env {
+    map: HashMap<String, Expr>,
+    parent: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Callframe {
     ip: usize,
     chunk: Chunk,
-    env: HashMap<String, Expr>,
+    env: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -27,6 +33,7 @@ pub struct VM {
     callframes: Vec<Callframe>,
     stack: Vec<Expr>,
     globals: HashMap<String, Expr>,
+    envs: HashMap<String, Env>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -70,10 +77,33 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                 Some(to_define) => to_define,
                 None => return Err("no value to define".to_string()),
             };
-            callframe.env.insert(name.clone(), definee);
+
+            let env = match vm.envs.get_mut(&callframe.env) {
+                Some(env) => env,
+                _ => return Err("env missing for callframe".to_string()),
+            };
+            env.map.insert(name.clone(), definee);
         }
         VMInstruction::Lookup(name) => {
-            let lookup = match callframe.env.get(name).or(vm.globals.get(name)) {
+            fn lookup_env(name: String, env_name: String, vm: VM) -> Option<Expr> {
+                let env = match vm.envs.get(&env_name) {
+                    Some(env) => env,
+                    None => panic!("env not found for callframe!!!"),
+                };
+                let lookup = env.map.get(&name);
+                let parent = env.parent.clone();
+                match lookup {
+                    value @ Some(_) => value.cloned(),
+                    _ => match parent {
+                        Some(parent_name) => lookup_env(name, parent_name, vm),
+                        None => None,
+                    },
+                }
+            }
+            let cloned_vm = vm.clone();
+            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), cloned_vm)
+                .or(vm.globals.get(name).cloned())
+            {
                 Some(instructions) => instructions,
                 None => return Err(format!("not found: {name}")),
             };
@@ -90,9 +120,11 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                         code: instructions.clone(),
                         constants: vec![],
                     },
-                    env: HashMap::new(),
+                    env: "NONE".to_string(),
                 },
                 Some(Expr::Lambda(chunk, vars)) => {
+                    let new_env_name = (vm.envs.len() + 1).to_string();
+
                     let x = vm
                         .stack
                         .drain(stack_len - arity..stack_len)
@@ -105,15 +137,22 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                             x.len()
                         ));
                     }
-                    let env = vars
+                    let map = vars
                         .iter()
                         .map(|x| x.clone())
                         .zip(x.clone())
                         .collect::<HashMap<String, Expr>>();
+                    vm.envs.insert(
+                        new_env_name.to_string(),
+                        Env {
+                            map,
+                            parent: Some(callframe.env.clone()),
+                        },
+                    );
                     Callframe {
                         ip: 0,
                         chunk: chunk.to_owned(),
-                        env,
+                        env: new_env_name.to_string(),
                     }
                 }
                 found => {
@@ -185,8 +224,7 @@ fn test_add() {
     let callframe = Callframe {
         ip: 0,
         chunk,
-
-        env: HashMap::new(),
+        env: "none".to_string(),
     };
 
     let mut vm = get_initial_vm_and_chunk();
@@ -207,6 +245,13 @@ fn get_initial_vm_and_chunk() -> VM {
         callframes: vec![],
         stack: vec![Expr::BuiltIn(vec![])],
         globals,
+        envs: HashMap::from([(
+            "initial_env".to_string(),
+            Env {
+                map: HashMap::new(),
+                parent: None,
+            },
+        )]),
     }
 }
 
@@ -232,7 +277,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
     let callframe = Callframe {
         ip: 0,
         chunk,
-        env: HashMap::new(),
+        env: "initial_env".to_string(),
     };
     vm.callframes.push(callframe);
 
