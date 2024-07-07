@@ -31,7 +31,9 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::Lambda(xs, vars) => write!(formatter, "Lambda({xs:?}, {vars:?})"),
+            Expr::Lambda(xs, vars) => {
+                write!(formatter, "Lambda({xs:?}, {vars:?})")
+            }
             Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
     }

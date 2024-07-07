@@ -123,7 +123,7 @@ pub fn compile_internal(
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw));
         }
-        Expr::Lambda(_, _) => panic!("Cannot compile a Lambda"),
+        Expr::Lambda(..) => panic!("Cannot compile a Lambda"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
@@ -292,7 +292,7 @@ fn lambda_compile_test() {
                     code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                     constants: vec![Expr::Num(1.0)]
                 },
-                vec![]
+                vec![],
             ),]
         }
     );
@@ -307,7 +307,7 @@ fn lambda_compile_test() {
                     code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                     constants: vec![Expr::Num(1.0)]
                 },
-                vec![]
+                vec![],
             )]
         }
     );

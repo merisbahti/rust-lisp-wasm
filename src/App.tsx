@@ -175,11 +175,14 @@ function App() {
   const [value, setValue] = React.useState(
     `
 (define x 1)
-(define y 2)
-(define fn (lambda (f) 
-  (+ x y)
+(define fnA (lambda () 
+    (+ x y)
 ))
-(fn)
+(define fnB (lambda () 
+    (define y 5)
+    (fnA)
+))
+(fnB)
 `.trim(),
   );
   const [expr, setExpr] = React.useState<{

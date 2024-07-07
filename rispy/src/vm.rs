@@ -149,6 +149,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         Env {
                             map,
                             parent: Some(callframe.env.clone()),
+                            // parent: None,
                         },
                     );
                     Callframe {
@@ -171,7 +172,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             // remove fn from stack?
             let rv = match (vm.stack.pop(), vm.stack.pop()) {
                 (Some(rv), Some(Expr::BuiltIn(_))) => rv,
-                (Some(rv), Some(Expr::Lambda(_, _))) => rv,
+                (Some(rv), Some(Expr::Lambda(..))) => rv,
                 (Some(_), Some(not_fn)) => {
                     return Err(format!(
                         "expected fn on stack after returning, but found: {:?}",
