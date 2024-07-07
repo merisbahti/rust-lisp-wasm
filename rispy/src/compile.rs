@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub fn compile(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
-    return compile_internal(expr, chunk, None);
+    compile_internal(expr, chunk, None)
 }
 
 fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
@@ -22,9 +22,9 @@ fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
 
 fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
-        Expr::Pair(box expr, box Expr::Nil) => return Ok(vec![expr.to_owned()]),
+        Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
         Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
-            return collect_exprs_from_body(next).map(|mut x| {
+            collect_exprs_from_body(next).map(|mut x| {
                 x.insert(0, expr.to_owned());
                 x
             })
@@ -39,7 +39,7 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
-        otherwise @ _ => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
+        otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
     let body = match collect_exprs_from_body(&unextracted_body) {
@@ -78,7 +78,7 @@ fn make_define(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
             (kw, definee)
         }
-        otherwise @ _ => {
+        otherwise => {
             return Err(format!(
                 "definition, expected kw and expr but found: {:?}",
                 otherwise
@@ -106,10 +106,10 @@ pub fn compile_internal(
         Expr::LambdaDefinition(..) => {
             todo!("Cannot compile a lambda definition (it's already compiled right?)")
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda".to_string() => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == *"lambda" => {
             return make_lambda(r, chunk);
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define".to_string() => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == *"define" => {
             return make_define(r, chunk);
         }
         Expr::Pair(box l, box r) => {
@@ -133,10 +133,7 @@ pub fn compile_internal(
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
-            match calling_context {
-                Some(calls) => chunk.code.push(VMInstruction::Call(calls)),
-                None => {}
-            };
+            if let Some(calls) = calling_context { chunk.code.push(VMInstruction::Call(calls)) };
         }
     };
     Ok(chunk.clone())
@@ -150,10 +147,10 @@ pub fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) -> Result<(), Str
         };
         if i == exprs.len() - 1 {
             chunk.code.push(VMInstruction::Return);
-            return Ok(());
+            Ok(())
         } else {
             chunk.code.push(VMInstruction::PopStack);
-            return Ok(());
+            Ok(())
         }
     });
 }
@@ -199,7 +196,7 @@ fn losta_compile() {
             constants: vec![],
         };
         match compile(expr, &mut chunk) {
-            Ok(e) => return e.code,
+            Ok(e) => e.code,
             Err(e) => panic!("Error: {:?}", e),
         }
     }
@@ -287,7 +284,7 @@ fn lambda_compile_test() {
             constants: vec![],
         };
         match compile(expr, &mut chunk) {
-            Ok(e) => return e,
+            Ok(e) => e,
             Err(e) => panic!("Error: {:?}", e),
         }
     }

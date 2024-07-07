@@ -47,7 +47,7 @@ fn run(mut vm: VM) -> Result<VM, String> {
     loop {
         match step(&mut vm) {
             Err(err) => return Err(err),
-            Ok(()) if vm.callframes.len() == 0 => return Ok(vm),
+            Ok(()) if vm.callframes.is_empty() => return Ok(vm),
             Ok(()) => {}
         }
     }
@@ -156,7 +156,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                     }
                     let map = vars
                         .iter()
-                        .map(|x| x.clone())
+                        .cloned()
                         .zip(x.clone())
                         .collect::<HashMap<String, Expr>>();
                     envs.insert(
@@ -194,12 +194,12 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         not_fn,
                     ))
                 }
-                _ => return Err(format!("too few args for return on stack",)),
+                _ => return Err("too few args for return on stack".to_string()),
             };
             vm.stack.push(rv);
 
             match vm.callframes.pop() {
-                Some(_) if vm.callframes.len() == 0 => return Ok(()),
+                Some(_) if vm.callframes.is_empty() => return Ok(()),
                 Some(_) => {}
                 _ => {
                     return Err("no callframes".to_string());
@@ -207,7 +207,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             }
         }
         VMInstruction::Constant(arg) => {
-            if let Some(constant) = chunk.constants.get(arg.clone()) {
+            if let Some(constant) = chunk.constants.get(*arg) {
                 vm.stack.push(constant.clone());
             } else {
                 return Err(format!("constant not found: {arg}"));
@@ -225,7 +225,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             }
         }
     }
-    return Ok(());
+    Ok(())
 }
 #[test]
 fn test_add() {
@@ -287,10 +287,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
         constants: vec![],
     };
 
-    match compile_many_exprs(exprs, &mut chunk) {
-        Err(msg) => return Err(msg),
-        _ => {}
-    };
+    compile_many_exprs(exprs, &mut chunk)?;
 
     let callframe = Callframe {
         ip: 0,
@@ -299,7 +296,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
     };
     vm.callframes.push(callframe);
 
-    return Ok(vm);
+    Ok(vm)
 }
 
 // just for tests
@@ -315,7 +312,7 @@ fn jit_run(input: String) -> Result<Expr, String> {
         Err(err) => return Result::Err(err),
     };
 
-    match interpreted.stack.get(0) {
+    match interpreted.stack.first() {
         Some(top) if interpreted.stack.len() == 1 => Ok(top.clone()),
         _ => Result::Err(format!(
             "expected one value on the stack, got {:#?}",
