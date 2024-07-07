@@ -14,7 +14,12 @@ pub enum Expr {
     Keyword(String),
     Boolean(bool),
     Quote(Box<Expr>),
-    Lambda(Chunk, Vec<String>),
+    Lambda(
+        Chunk,
+        Vec<String>,
+        String, /* env where it was defined*/
+    ),
+    LambdaDefinition(Chunk, Vec<String>),
     Nil,
     BuiltIn(Vec<VMInstruction>),
 }
@@ -31,8 +36,11 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::Lambda(xs, vars) => {
-                write!(formatter, "Lambda({xs:?}, {vars:?})")
+            Expr::Lambda(xs, vars, env) => {
+                write!(formatter, "Lambda({xs:?}, {vars:?}, {env:?})")
+            }
+            Expr::LambdaDefinition(xs, vars) => {
+                write!(formatter, "LambdaDefinition({xs:?}, {vars:?})")
             }
             Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
@@ -75,7 +83,12 @@ impl PartialEq for Expr {
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,
-            (Expr::Lambda(c1, s1), Expr::Lambda(c2, s2)) => c1 == c2 && s1 == s2,
+            (Expr::Lambda(c1, s1, d1), Expr::Lambda(c2, s2, d2)) => {
+                c1 == c2 && s1 == s2 && d1 == d2
+            }
+            (Expr::LambdaDefinition(c1, s1), Expr::LambdaDefinition(c2, s2)) => {
+                c1 == c2 && s1 == s2
+            }
             _ => false,
         }
     }

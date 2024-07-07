@@ -33,6 +33,17 @@ const ExprSchema = Type.Recursive((This) =>
           constants: Type.Array(This),
         }),
         Type.Array(Type.String()),
+        Type.String(),
+      ]),
+    }),
+
+    Type.Object({
+      LambdaDefinition: Type.Tuple([
+        Type.Object({
+          code: Type.Array(VMInstructionSchema),
+          constants: Type.Array(This),
+        }),
+        Type.Array(Type.String()),
       ]),
     }),
   ]),
@@ -214,6 +225,7 @@ function App() {
     expr.previousResult !== null ? parseResult(expr.previousResult) : null;
   const deserializedResult =
     expr.result !== null ? parseResult(expr.result) : null;
+  console.log(JSON.stringify(deserializedResult, null, 2));
 
   return (
     <div className="App">

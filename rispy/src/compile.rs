@@ -63,10 +63,13 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         Err(e) => return Err(e),
     };
 
-    chunk.constants.push(Expr::Lambda(new_body_chunk, kws));
+    chunk
+        .constants
+        .push(Expr::LambdaDefinition(new_body_chunk, kws));
     chunk
         .code
         .push(VMInstruction::Constant(chunk.constants.len() - 1));
+    chunk.code.push(VMInstruction::MakeLambda);
     Ok(chunk.clone())
 }
 
@@ -100,6 +103,9 @@ pub fn compile_internal(
     calling_context: Option<usize>,
 ) -> Result<Chunk, String> {
     match expr {
+        Expr::LambdaDefinition(..) => {
+            todo!("Cannot compile a lambda definition (it's already compiled right?)")
+        }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda".to_string() => {
             return make_lambda(r, chunk);
         }
@@ -256,7 +262,11 @@ fn losta_compile() {
 
     assert_eq!(
         parse_and_compile("((lambda () 1))"),
-        vec![VMInstruction::Constant(0), VMInstruction::Call(0)]
+        vec![
+            VMInstruction::Constant(0),
+            VMInstruction::MakeLambda,
+            VMInstruction::Call(0)
+        ]
     );
     assert_eq!(
         parse_and_compile("(define a 1)"),
@@ -286,8 +296,8 @@ fn lambda_compile_test() {
     assert_eq!(
         parse_and_compile("(lambda () 1)"),
         Chunk {
-            code: vec![VMInstruction::Constant(0)],
-            constants: vec![Expr::Lambda(
+            code: vec![VMInstruction::Constant(0), VMInstruction::MakeLambda],
+            constants: vec![Expr::LambdaDefinition(
                 Chunk {
                     code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                     constants: vec![Expr::Num(1.0)]
@@ -301,8 +311,12 @@ fn lambda_compile_test() {
     assert_eq!(
         parse_and_compile("((lambda () 1))"),
         Chunk {
-            code: vec![VMInstruction::Constant(0), VMInstruction::Call(0)],
-            constants: vec![Expr::Lambda(
+            code: vec![
+                VMInstruction::Constant(0),
+                VMInstruction::MakeLambda,
+                VMInstruction::Call(0)
+            ],
+            constants: vec![Expr::LambdaDefinition(
                 Chunk {
                     code: vec![VMInstruction::Constant(0), VMInstruction::Return],
                     constants: vec![Expr::Num(1.0)]

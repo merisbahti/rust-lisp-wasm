@@ -7,6 +7,7 @@ use crate::{compile::compile_many_exprs, expr::Expr, parse};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
     Lookup(String),
+    MakeLambda,
     Define(String),
     PopStack,
     Call(usize),
@@ -71,6 +72,20 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
         VMInstruction::PopStack => {
             vm.stack.pop();
         }
+        VMInstruction::MakeLambda => {
+            let definition_env = callframe.env.clone();
+            let (instructions, kws) = match vm.stack.pop() {
+                Some(Expr::LambdaDefinition(instructions, kws)) => (instructions, kws),
+                stuff => {
+                    return Err(format!(
+                        "expected lambda definition, but found: {:?}",
+                        stuff
+                    ))
+                }
+            };
+            vm.stack
+                .push(Expr::Lambda(instructions, kws, definition_env));
+        }
         VMInstruction::Define(name) => {
             let definee = match vm.stack.pop() {
                 Some(to_define) => to_define,
@@ -124,7 +139,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                     },
                     env: "NONE".to_string(),
                 },
-                Some(Expr::Lambda(chunk, vars)) => {
+                Some(Expr::Lambda(chunk, vars, definition_env)) => {
                     let new_env_name = (envs.len() + 1).to_string();
 
                     let x = vm
@@ -148,7 +163,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         new_env_name.to_string(),
                         Env {
                             map,
-                            parent: Some(callframe.env.clone()),
+                            parent: Some(definition_env),
                             // parent: None,
                         },
                     );
