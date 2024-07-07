@@ -9,6 +9,8 @@ mod expr;
 mod parse;
 mod vm;
 
+use std::collections::HashMap;
+
 use cfg_if::cfg_if;
 use vm::{prepare_vm, VM};
 use wasm_bindgen::prelude::*;
@@ -33,6 +35,20 @@ pub fn compile(expression: String) -> JsValue {
     let result: Result<VM, String> = prepare_vm(expression);
 
     serde_wasm_bindgen::to_value(&result).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn run(expression: String) -> JsValue {
+    let result = match vm::jit_run(expression.clone()) {
+        Ok(res) => res,
+        err => return serde_wasm_bindgen::to_value(&err).unwrap(),
+    };
+    let vm = prepare_vm(expression.clone()).map(|mut x| {
+        x.stack = vec![result];
+        x.callframes = vec![];
+        x
+    });
+    serde_wasm_bindgen::to_value(&vm).unwrap()
 }
 
 #[wasm_bindgen]

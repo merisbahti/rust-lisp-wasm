@@ -324,7 +324,6 @@ fn lambda_compile_test() {
         }
     }
 
-    println!("make lambda");
     assert_eq!(
         parse_and_compile("(lambda () 1)"),
         Chunk {
@@ -338,7 +337,6 @@ fn lambda_compile_test() {
             ),]
         }
     );
-    println!("make lambda and call");
 
     assert_eq!(
         parse_and_compile("((lambda () 1))"),

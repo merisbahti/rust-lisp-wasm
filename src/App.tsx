@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import "./App.css";
-import init, { compile, step } from "rispy";
+import init, { compile, step, run } from "rispy";
 import { Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
@@ -116,10 +116,10 @@ const StackComp = ({ stackItem }: { stackItem: VMType["stack"][number] }) => {
     if (typeof stackItem === "string") {
       return stackItem;
     }
-    if ("Num" in stackItem) {
-      return stackItem.Num;
-    } else if ("BuiltIn") {
-      return "fn";
+    let entries = Object.entries(stackItem);
+    let first = entries.at(0);
+    if (first) {
+      return `${first[0]}(${first[1]})`;
     }
     return "unknown";
   }, [stackItem]);
@@ -262,6 +262,21 @@ function App() {
                   }}
                 >
                   step
+                </button>
+              ) : null}
+
+              {deserializedResult && "Ok" in deserializedResult ? (
+                <button
+                  onClick={() => {
+                    setExpr(() => {
+                      return {
+                        previousResult: deserializedResult,
+                        result: run(value),
+                      };
+                    });
+                  }}
+                >
+                  run
                 </button>
               ) : null}
             </div>

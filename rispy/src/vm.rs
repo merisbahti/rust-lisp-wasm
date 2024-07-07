@@ -15,16 +15,17 @@ pub enum VMInstruction {
     Return,
     Constant(usize),
     Add,
+    Equals,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Env {
+pub struct Env {
     map: HashMap<String, Expr>,
     parent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Callframe {
+pub struct Callframe {
     ip: usize,
     chunk: Chunk,
     env: String,
@@ -32,10 +33,10 @@ struct Callframe {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VM {
-    callframes: Vec<Callframe>,
-    stack: Vec<Expr>,
-    globals: HashMap<String, Expr>,
-    envs: HashMap<String, Env>,
+    pub callframes: Vec<Callframe>,
+    pub stack: Vec<Expr>,
+    pub globals: HashMap<String, Expr>,
+    pub envs: HashMap<String, Env>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -225,6 +226,13 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 _ => return Err("addition requires two numbers".to_string()),
             }
         }
+        VMInstruction::Equals => {
+            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(arg1), Some(arg2)) => (arg1, arg2),
+                _ => return Err("too few args for equals on stack".to_string()),
+            };
+            vm.stack.push(Expr::Boolean(arg1 == arg2));
+        }
         VMInstruction::If(alt_ip) => {
             let pred = match vm.stack.pop() {
                 Some(pred) => pred,
@@ -269,10 +277,16 @@ fn test_add() {
 }
 
 fn get_initial_vm_and_chunk() -> VM {
-    let globals: HashMap<String, Expr> = HashMap::from([(
-        "+".to_string(),
-        Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
-    )]);
+    let globals: HashMap<String, Expr> = HashMap::from([
+        (
+            "+".to_string(),
+            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
+        ),
+        (
+            "=".to_string(),
+            Expr::BuiltIn(vec![VMInstruction::Equals, VMInstruction::Return]),
+        ),
+    ]);
 
     VM {
         callframes: vec![],
@@ -316,7 +330,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
 // just for tests
 #[allow(dead_code)]
-fn jit_run(input: String) -> Result<Expr, String> {
+pub fn jit_run(input: String) -> Result<Expr, String> {
     let vm = match prepare_vm(input) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
@@ -449,5 +463,24 @@ fn compiled_test() {
                 .to_string()
         ),
         Ok(Expr::Num(0.0))
+    );
+    assert_eq!(jit_run("(= 1 1)".to_string()), Ok(Expr::Boolean(true)));
+    assert_eq!(jit_run("(= 1 10)".to_string()), Ok(Expr::Boolean(false)));
+
+    assert_eq!(
+        jit_run(
+            "
+(define fib (lambda ( n) 
+  (fib-iter 1 0 n)) )
+(define fib-iter (lambda (a b count)
+(if (= count 0)
+      b
+      (fib-iter (+ a b) a (+ count -1)))
+)
+  )
+(fib 90)"
+                .to_string()
+        ),
+        Ok(Expr::Num(2.880067194370816e18))
     );
 }
