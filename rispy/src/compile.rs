@@ -97,6 +97,36 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     Ok(chunk.clone())
 }
 
+fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+    let (pred, consequent, alternate) = match expr {
+        Expr::Pair(
+            box pred,
+            box Expr::Pair(box consequent, box Expr::Pair(box alternate, box Expr::Nil)),
+        ) => (pred, consequent, alternate),
+        otherwise => {
+            return Err(format!(
+                "definition, expected kw and expr but found: {:?}",
+                otherwise
+            ))
+        }
+    };
+    let mut cons_chunk = Chunk {
+        code: vec![],
+        constants: vec![],
+    };
+    compile(consequent, &mut cons_chunk)?;
+    compile(pred, chunk)?;
+    chunk.code.push(VMInstruction::If(
+        cons_chunk.code.len()   
+            // one extra return for consequent
+            + 1,
+    ));
+    compile(consequent, chunk)?;
+    chunk.code.push(VMInstruction::Return);
+    compile(alternate, chunk)?;
+    Ok(chunk.clone())
+}
+
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
@@ -106,11 +136,14 @@ pub fn compile_internal(
         Expr::LambdaDefinition(..) => {
             todo!("Cannot compile a lambda definition (it's already compiled right?)")
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if *kw == *"lambda" => {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
             return make_lambda(r, chunk);
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if *kw == *"define" => {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             return make_define(r, chunk);
+        }
+        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
+            return make_if(r, chunk);
         }
         Expr::Pair(box l, box r) => {
             let _ = compile_internal(l, chunk, None);

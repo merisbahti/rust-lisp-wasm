@@ -17,6 +17,9 @@ const VMInstructionSchema = Type.Union([
   Type.Object({
     Define: Type.String(),
   }),
+  Type.Object({
+    If: Type.Number(),
+  }),
   Type.String(),
 ]);
 type VMInstruction = Static<typeof VMInstructionSchema>;
@@ -185,16 +188,8 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 function App() {
   const [value, setValue] = React.useState(
     `
-(define x 1)
-(define fnA (lambda () 
-    (+ x y)
-))
-(define fnB (lambda () 
-    (define y 5)
-    (fnA)
-))
-(fnB)
-`.trim(),
+(if (+ 0 0) 2 3)
+    `.trim(),
   );
   const [expr, setExpr] = React.useState<{
     previousResult: unknown;
@@ -213,10 +208,10 @@ function App() {
           console.log("error");
         }
       })
-      .catch((e) =>
+      .catch((e: unknown) =>
         setExpr(() => ({
           previousResult: null,
-          result: `An error occured: ${e.message}`,
+          result: `An error occured: ${typeof e === "object" && e !== null && "message" in e ? e.message : e}`,
         })),
       );
   }, [value]);

@@ -10,6 +10,7 @@ pub enum VMInstruction {
     MakeLambda,
     Define(String),
     PopStack,
+    If(usize),
     Call(usize),
     Return,
     Constant(usize),
@@ -224,6 +225,20 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 _ => return Err("addition requires two numbers".to_string()),
             }
         }
+        VMInstruction::If(alt_ip) => {
+            let pred = match vm.stack.pop() {
+                Some(pred) => pred,
+                found_vals => {
+                    return Err(format!("too few args for if on stack: {:?}", found_vals))
+                }
+            };
+            match pred {
+                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => {
+                    callframe.ip = callframe.ip + *alt_ip
+                }
+                _ => {}
+            }
+        }
     }
     Ok(())
 }
@@ -392,5 +407,47 @@ fn compiled_test() {
             .to_string()
         ),
         Err("not found: y".to_string())
+    );
+    assert_eq!(
+        jit_run(
+            "
+(if 1 2 3)
+"
+            .to_string()
+        ),
+        Ok(Expr::Num(2.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(if (+ 0 0) 2 3)
+"
+            .to_string()
+        ),
+        Ok(Expr::Num(3.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(define f (lambda (a b) 0))
+(if (f 3 -3) 2 10)
+"
+            .to_string()
+        ),
+        Ok(Expr::Num(10.0))
+    );
+    assert_eq!(
+        jit_run(
+            "
+(define f (lambda (x)
+  (if x (f (+ x -1)) x
+  )))
+    
+(f 10)"
+                .to_string()
+        ),
+        Ok(Expr::Num(0.0))
     );
 }
