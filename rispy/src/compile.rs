@@ -57,6 +57,7 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         constants: vec![],
     };
 
+    // find closing over variables
     compile_many_exprs(body.clone(), &mut new_body_chunk);
 
     chunk.constants.push(Expr::Lambda(new_body_chunk, kws));
@@ -132,16 +133,18 @@ pub fn compile_internal(
     Ok(chunk.clone())
 }
 
-fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) {
-    exprs.iter().enumerate().for_each(|(i, expr)| {
+pub fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) -> Result<(), String> {
+    return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
         match compile(expr.clone(), chunk) {
             Ok(_) => {}
-            Err(e) => panic!("{:?}", e),
+            Err(e) => return Err(e),
         };
         if i == exprs.len() - 1 {
             chunk.code.push(VMInstruction::Return);
+            return Ok(());
         } else {
             chunk.code.push(VMInstruction::PopStack);
+            return Ok(());
         }
     });
 }

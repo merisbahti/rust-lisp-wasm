@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{compile, expr::Expr, parse};
+use crate::{
+    compile::{self, compile_many_exprs},
+    expr::Expr,
+    parse,
+};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
@@ -229,17 +233,11 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
         code: vec![],
         constants: vec![],
     };
-    exprs.iter().enumerate().for_each(|(i, expr)| {
-        match compile::compile(expr.clone(), &mut chunk) {
-            Ok(_) => {}
-            Err(e) => panic!("{:?}", e),
-        };
-        if i == exprs.len() - 1 {
-            chunk.code.push(VMInstruction::Return);
-        } else {
-            chunk.code.push(VMInstruction::PopStack);
-        }
-    });
+
+    match compile_many_exprs(exprs, &mut chunk) {
+        Err(msg) => return Err(msg),
+        _ => {}
+    };
 
     let callframe = Callframe {
         ip: 0,
