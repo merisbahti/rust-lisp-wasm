@@ -37,9 +37,15 @@ pub fn compile(expression: String) -> JsValue {
 
 #[wasm_bindgen]
 pub fn step(expression: JsValue) -> JsValue {
-    let deserialized: Result<VM, String> = serde_wasm_bindgen::from_value(expression)
-        .map_err(|e| e.to_string())
-        .and_then(|x| vm::step(x));
+    let deserialized: Result<VM, String> =
+        serde_wasm_bindgen::from_value(expression).map_err(|e| e.to_string());
 
-    serde_wasm_bindgen::to_value(&deserialized).unwrap()
+    let res = match deserialized {
+        Ok(mut x) => match vm::step(&mut x) {
+            Ok(..) => Ok(x),
+            Err(err) => Err(err),
+        },
+        Err(e) => Err(e),
+    };
+    serde_wasm_bindgen::to_value(&res).unwrap()
 }

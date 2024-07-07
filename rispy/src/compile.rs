@@ -58,7 +58,10 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     };
 
     // find closing over variables
-    compile_many_exprs(body.clone(), &mut new_body_chunk);
+    match compile_many_exprs(body.clone(), &mut new_body_chunk) {
+        Ok(..) => {}
+        Err(e) => return Err(e),
+    };
 
     chunk.constants.push(Expr::Lambda(new_body_chunk, kws));
     chunk

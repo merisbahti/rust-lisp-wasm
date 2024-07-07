@@ -44,20 +44,19 @@ pub struct Chunk {
 
 fn run(mut vm: VM) -> Result<VM, String> {
     loop {
-        match step(vm) {
-            err @ Err(_) => return err,
-            Ok(vm) if vm.callframes.len() == 0 => return Ok(vm),
-            Ok(new_vm) => {
-                vm = new_vm;
-            }
+        match step(&mut vm) {
+            Err(err) => return Err(err),
+            Ok(()) if vm.callframes.len() == 0 => return Ok(vm),
+            Ok(()) => {}
         }
     }
 }
 
-pub fn step(mut vm: VM) -> Result<VM, String> {
-    let callframes = &mut vm.callframes;
-    let len = callframes.len();
-    let callframe = match callframes.get_mut(len - 1) {
+pub fn step(vm: &mut VM) -> Result<(), String> {
+    // let callframes = &mut vm.callframes;
+    // let len = callframes.len();
+    let envs = &mut vm.envs;
+    let callframe = match vm.callframes.last_mut() {
         Some(x) => x,
         _ => return Err("no callframes".to_string()),
     };
@@ -78,15 +77,19 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                 None => return Err("no value to define".to_string()),
             };
 
-            let env = match vm.envs.get_mut(&callframe.env) {
+            let env = match envs.get_mut(&callframe.env) {
                 Some(env) => env,
                 _ => return Err("env missing for callframe".to_string()),
             };
             env.map.insert(name.clone(), definee);
         }
         VMInstruction::Lookup(name) => {
-            fn lookup_env(name: String, env_name: String, vm: VM) -> Option<Expr> {
-                let env = match vm.envs.get(&env_name) {
+            fn lookup_env(
+                name: String,
+                env_name: String,
+                envs: HashMap<String, Env>,
+            ) -> Option<Expr> {
+                let env = match envs.get(&env_name) {
                     Some(env) => env,
                     None => panic!("env not found for callframe!!!"),
                 };
@@ -95,13 +98,12 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                 match lookup {
                     value @ Some(_) => value.cloned(),
                     _ => match parent {
-                        Some(parent_name) => lookup_env(name, parent_name, vm),
+                        Some(parent_name) => lookup_env(name, parent_name, envs),
                         None => None,
                     },
                 }
             }
-            let cloned_vm = vm.clone();
-            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), cloned_vm)
+            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), envs.clone())
                 .or(vm.globals.get(name).cloned())
             {
                 Some(instructions) => instructions,
@@ -123,7 +125,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                     env: "NONE".to_string(),
                 },
                 Some(Expr::Lambda(chunk, vars)) => {
-                    let new_env_name = (vm.envs.len() + 1).to_string();
+                    let new_env_name = (envs.len() + 1).to_string();
 
                     let x = vm
                         .stack
@@ -142,7 +144,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                         .map(|x| x.clone())
                         .zip(x.clone())
                         .collect::<HashMap<String, Expr>>();
-                    vm.envs.insert(
+                    envs.insert(
                         new_env_name.to_string(),
                         Env {
                             map,
@@ -172,16 +174,16 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                 (Some(rv), Some(Expr::Lambda(_, _))) => rv,
                 (Some(_), Some(not_fn)) => {
                     return Err(format!(
-                        "expected fn on stack after returning, but found: {:?}\nvm: {:?}",
-                        not_fn, vm
+                        "expected fn on stack after returning, but found: {:?}",
+                        not_fn,
                     ))
                 }
-                _ => return Err(format!("too few args for return on stack: {:?}", vm)),
+                _ => return Err(format!("too few args for return on stack",)),
             };
             vm.stack.push(rv);
 
-            match callframes.pop() {
-                Some(_) if callframes.len() == 0 => return Ok(vm.clone()),
+            match vm.callframes.pop() {
+                Some(_) if vm.callframes.len() == 0 => return Ok(()),
                 Some(_) => {}
                 _ => {
                     return Err("no callframes".to_string());
@@ -207,7 +209,7 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
             }
         }
     }
-    return Ok(vm.clone());
+    return Ok(());
 }
 #[test]
 fn test_add() {
@@ -359,6 +361,21 @@ fn compiled_test() {
     assert_eq!(
         jit_run(
             "
+(define x 5)
+(define y 7)
+(define fn (lambda () 
+  (+ x y)
+))
+(fn)
+        "
+            .to_string()
+        ),
+        Ok(Expr::Num(12.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
 (define x 1)
 (define fnA (lambda () 
     (+ x y)
@@ -372,19 +389,5 @@ fn compiled_test() {
             .to_string()
         ),
         Err("not found: y".to_string())
-    );
-    assert_eq!(
-        jit_run(
-            "
-(define x 5)
-(define y 7)
-(define fn (lambda () 
-  (+ x y)
-))
-(fn)
-        "
-            .to_string()
-        ),
-        Ok(Expr::Num(12.0))
     );
 }
