@@ -2,11 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    compile::{self, compile_many_exprs},
-    expr::Expr,
-    parse,
-};
+use crate::{compile::compile_many_exprs, expr::Expr, parse};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
@@ -202,16 +198,10 @@ fn test_add() {
 }
 
 fn get_initial_vm_and_chunk() -> VM {
-    let globals: HashMap<String, Expr> = HashMap::from([
-        (
-            "+".to_string(),
-            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
-        ),
-        (
-            "lambda".to_string(),
-            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
-        ),
-    ]);
+    let globals: HashMap<String, Expr> = HashMap::from([(
+        "+".to_string(),
+        Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
+    )]);
 
     VM {
         callframes: vec![],
