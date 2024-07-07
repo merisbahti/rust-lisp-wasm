@@ -214,8 +214,8 @@ function App() {
         }
       })
       .catch((e) =>
-        setExpr(({ previousResult }) => ({
-          previousResult: previousResult,
+        setExpr(() => ({
+          previousResult: null,
           result: `An error occured: ${e.message}`,
         })),
       );
