@@ -174,9 +174,9 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 function App() {
   const [value, setValue] = React.useState(
     `
+(define x 1)
+(define y 2)
 (define fn (lambda (f) 
-  (define x 1)
-  (define y 2)
   (+ x y)
 ))
 (fn)
@@ -224,7 +224,8 @@ function App() {
             }}
           >
             <textarea
-              style={{ fontSize: "32px" }}
+              rows={10}
+              style={{ fontSize: "32px", width: "100%" }}
               value={value}
               onChange={(e) => {
                 setValue(e.target.value);

@@ -326,6 +326,23 @@ fn compiled_test() {
     assert_eq!(
         jit_run(
             "
+(define x 1)
+(define fnA (lambda () 
+    (+ x y)
+))
+(define fnB (lambda () 
+    (define y 5)
+    (fnA)
+))
+(fnB)
+        "
+            .to_string()
+        ),
+        Err("not found: y".to_string())
+    );
+    assert_eq!(
+        jit_run(
+            "
 (define x 5)
 (define y 7)
 (define fn (lambda () 
