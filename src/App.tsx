@@ -74,17 +74,30 @@ function App() {
   const [value, setValue] = React.useState(
     "((lambda (a b) (+ a (+ b b))) 1 2)",
   );
-  const [expr, setExpr] = React.useState<unknown>(null);
+  const [expr, setExpr] = React.useState<{
+    previousResult: unknown;
+    result: unknown;
+  }>({ previousResult: null, result: null });
 
   useEffect(() => {
     init()
       .then(() => {
-        setExpr(compile(value));
+        setExpr(({ previousResult }) => ({
+          previousResult,
+          result: compile(value),
+        }));
       })
-      .catch((e) => setExpr(`An error occured: ${e.message}`));
+      .catch((e) =>
+        setExpr(({ previousResult }) => ({
+          previousResult: previousResult,
+          result: `An error occured: ${e.message}`,
+        })),
+      );
   }, [value]);
 
-  const deserializedResult = expr !== null ? parseResult(expr) : null;
+  const previousResultDeserialized =
+    expr !== null ? parseResult(expr.previousResult) : null;
+  const deserializedResult = expr !== null ? parseResult(expr.result) : null;
 
   return (
     <div className="App">
@@ -115,7 +128,12 @@ function App() {
               {deserializedResult && "Ok" in deserializedResult ? (
                 <button
                   onClick={() => {
-                    setExpr(step(deserializedResult.Ok));
+                    setExpr(() => {
+                      return {
+                        previousResult: deserializedResult,
+                        result: step(deserializedResult.Ok),
+                      };
+                    });
                   }}
                 >
                   step
@@ -127,7 +145,13 @@ function App() {
             {deserializedResult && "Ok" in deserializedResult ? (
               <VMComponent vm={deserializedResult.Ok} />
             ) : (
-              deserializedResult?.Err
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ color: "red" }}>{deserializedResult?.Err}</div>
+                {previousResultDeserialized &&
+                "Ok" in previousResultDeserialized ? (
+                  <VMComponent vm={previousResultDeserialized.Ok} />
+                ) : null}
+              </div>
             )}
           </div>
         </div>
