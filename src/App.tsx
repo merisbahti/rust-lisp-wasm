@@ -14,12 +14,16 @@ const VMInstructionSchema = Type.Union([
   Type.Object({
     Call: Type.Number(),
   }),
+  Type.Object({
+    Define: Type.String(),
+  }),
   Type.String(),
 ]);
 type VMInstruction = Static<typeof VMInstructionSchema>;
 
 const ExprSchema = Type.Recursive((This) =>
   Type.Union([
+    Type.String(),
     Type.Object({ Num: Type.Number() }),
     Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
     Type.Object({
@@ -62,103 +66,13 @@ const parseResult = (result: unknown): { Ok: VMType } | { Err: string } => {
   try {
     return Value.Decode(ResultSchema, result);
   } catch (error) {
-    console.error(
-      "failed when serializing:",
-      Value.Errors(ResultSchema, result),
-    );
+    console.log(result);
+    console.error("failed when serializing:", [
+      ...Value.Errors(ResultSchema, result),
+    ]);
     return { Err: "Decoding error, look at the console" };
   }
 };
-
-function App() {
-  const [value, setValue] = React.useState(
-    "((lambda (a b) (+ a (+ b b))) 1 2)",
-  );
-  const [expr, setExpr] = React.useState<{
-    previousResult: unknown;
-    result: unknown;
-  }>({ previousResult: null, result: null });
-
-  useEffect(() => {
-    init()
-      .then(() => {
-        setExpr(({ previousResult }) => ({
-          previousResult,
-          result: compile(value),
-        }));
-      })
-      .catch((e) =>
-        setExpr(({ previousResult }) => ({
-          previousResult: previousResult,
-          result: `An error occured: ${e.message}`,
-        })),
-      );
-  }, [value]);
-
-  const previousResultDeserialized =
-    expr !== null ? parseResult(expr.previousResult) : null;
-  const deserializedResult = expr !== null ? parseResult(expr.result) : null;
-
-  return (
-    <div className="App">
-      <header className="App-header">
-        <div style={{ display: "flex", flexDirection: "row" }}>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "end",
-            }}
-          >
-            <textarea
-              style={{ fontSize: "32px" }}
-              value={value}
-              onChange={(e) => {
-                setValue(e.target.value);
-              }}
-            />
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                marginTop: "8px",
-                gap: "8px",
-              }}
-            >
-              {deserializedResult && "Ok" in deserializedResult ? (
-                <button
-                  onClick={() => {
-                    setExpr(() => {
-                      return {
-                        previousResult: deserializedResult,
-                        result: step(deserializedResult.Ok),
-                      };
-                    });
-                  }}
-                >
-                  step
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div style={{ marginLeft: "32px" }}>
-            {deserializedResult && "Ok" in deserializedResult ? (
-              <VMComponent vm={deserializedResult.Ok} />
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ color: "red" }}>{deserializedResult?.Err}</div>
-                {previousResultDeserialized &&
-                "Ok" in previousResultDeserialized ? (
-                  <VMComponent vm={previousResultDeserialized.Ok} />
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-    </div>
-  );
-}
 
 const VMInstructionComp = ({
   instr,
@@ -184,6 +98,9 @@ const VMInstructionComp = ({
 
 const StackComp = ({ stackItem }: { stackItem: VMType["stack"][number] }) => {
   const formatted = React.useMemo(() => {
+    if (typeof stackItem === "string") {
+      return stackItem;
+    }
     if ("Num" in stackItem) {
       return stackItem.Num;
     } else if ("BuiltIn") {
@@ -253,5 +170,98 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
     </div>
   );
 };
+
+function App() {
+  const [value, setValue] = React.useState(`
+(define x 1)
+(define y 2)
+(+ x y)
+`);
+  const [expr, setExpr] = React.useState<{
+    previousResult: unknown;
+    result: unknown;
+  }>({ previousResult: null, result: null });
+
+  useEffect(() => {
+    init()
+      .then(() => {
+        setExpr(({ previousResult }) => ({
+          previousResult,
+          result: compile(value),
+        }));
+      })
+      .catch((e) =>
+        setExpr(({ previousResult }) => ({
+          previousResult: previousResult,
+          result: `An error occured: ${e.message}`,
+        })),
+      );
+  }, [value]);
+
+  const previousResultDeserialized =
+    expr.previousResult !== null ? parseResult(expr.previousResult) : null;
+  const deserializedResult =
+    expr.result !== null ? parseResult(expr.result) : null;
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <div style={{ display: "flex", flexDirection: "row" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "end",
+            }}
+          >
+            <textarea
+              style={{ fontSize: "32px" }}
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                marginTop: "8px",
+                gap: "8px",
+              }}
+            >
+              {deserializedResult && "Ok" in deserializedResult ? (
+                <button
+                  onClick={() => {
+                    setExpr(() => {
+                      return {
+                        previousResult: deserializedResult,
+                        result: step(deserializedResult.Ok),
+                      };
+                    });
+                  }}
+                >
+                  step
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div style={{ marginLeft: "32px" }}>
+            {deserializedResult && "Ok" in deserializedResult ? (
+              <VMComponent vm={deserializedResult.Ok} />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ color: "red" }}>{deserializedResult?.Err}</div>
+                {previousResultDeserialized &&
+                "Ok" in previousResultDeserialized ? (
+                  <VMComponent vm={previousResultDeserialized.Ok} />
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+    </div>
+  );
+}
 
 export default App;

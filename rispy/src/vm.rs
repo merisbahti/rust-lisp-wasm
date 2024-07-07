@@ -7,7 +7,8 @@ use crate::{compile, expr::Expr, parse};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
     Lookup(String),
-    Define,
+    Define(String),
+    PopStack,
     Call(usize),
     Return,
     Constant(usize),
@@ -61,11 +62,15 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
     };
     callframe.ip += 1;
     match instruction {
-        VMInstruction::Define => {
-            let to_define = match vm.stack.pop() {
+        VMInstruction::PopStack => {
+            vm.stack.pop();
+        }
+        VMInstruction::Define(name) => {
+            let definee = match vm.stack.pop() {
                 Some(to_define) => to_define,
                 None => return Err("no value to define".to_string()),
             };
+            callframe.env.insert(name.clone(), definee);
         }
         VMInstruction::Lookup(name) => {
             let lookup = match callframe.env.get(name).or(vm.globals.get(name)) {
@@ -208,13 +213,8 @@ fn get_initial_vm_and_chunk() -> VM {
 
 pub fn prepare_vm(input: String) -> Result<VM, String> {
     // parse, compile and run, then check what's left on the stack
-    let parsed_expr = parse::parse(&input).and_then(|x| match x.first() {
-        Some(res) if x.len() == 1 => Ok(res.clone()),
-        _ => Err(format!("expected one expression, got {}", x.len())),
-    });
-
-    let expr = match parsed_expr {
-        Ok(expr) => expr,
+    let exprs = match parse::parse(&input) {
+        Ok(res) => res,
         Err(err) => return Err(err),
     };
 
@@ -224,10 +224,18 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
         code: vec![],
         constants: vec![],
     };
-    match compile::compile(expr, &mut chunk) {
-        Ok(_) => {}
-        Err(e) => panic!("{:?}", e),
-    };
+    exprs.iter().enumerate().for_each(|(i, expr)| {
+        match compile::compile(expr.clone(), &mut chunk) {
+            Ok(_) => {}
+            Err(e) => panic!("{:?}", e),
+        };
+        if i == exprs.len() - 1 {
+            chunk.code.push(VMInstruction::Return);
+        } else {
+            chunk.code.push(VMInstruction::PopStack);
+        }
+    });
+
     chunk.code.push(VMInstruction::Return);
 
     let callframe = Callframe {
@@ -284,4 +292,16 @@ fn compiled_test() {
     assert_eq!(res, Ok(Expr::Num(1.0)));
     let res = maybe_log_err(jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string()));
     assert_eq!(res, Ok(Expr::Num(5.0)));
+
+    assert_eq!(
+        jit_run(
+            "
+(define x 1)
+(define y 2)
+(+ x y)
+        "
+            .to_string()
+        ),
+        Ok(Expr::Num(3.0))
+    );
 }

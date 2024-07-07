@@ -64,6 +64,30 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     Ok(chunk.clone())
 }
 
+fn make_define(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+    let (kw, definee) = match expr {
+        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
+            (kw, definee)
+        }
+        otherwise @ _ => {
+            return Err(format!(
+                "definition, expected kw and expr but found: {:?}",
+                otherwise
+            ))
+        }
+    };
+    match compile(definee, chunk) {
+        Ok(_) => {}
+        err @ Err(_) => return err,
+    };
+    chunk.code.push(VMInstruction::Define(kw));
+    chunk.constants.push(Expr::Nil);
+    chunk
+        .code
+        .push(VMInstruction::Constant(chunk.constants.len() - 1));
+    Ok(chunk.clone())
+}
+
 pub fn compile_internal(
     expr: Expr,
     chunk: &mut Chunk,
@@ -74,7 +98,7 @@ pub fn compile_internal(
             return make_lambda(r, chunk);
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define".to_string() => {
-            chunk.code.push(VMInstruction::Define);
+            return make_define(r, chunk);
         }
         Expr::Pair(box l, box r) => {
             let _ = compile_internal(l, chunk, None);
@@ -211,6 +235,14 @@ fn losta_compile() {
     assert_eq!(
         parse_and_compile("((lambda () 1))"),
         vec![VMInstruction::Constant(0), VMInstruction::Call(0)]
+    );
+    assert_eq!(
+        parse_and_compile("(define a 1)"),
+        vec![
+            VMInstruction::Constant(0),
+            VMInstruction::Define("a".to_string()),
+            VMInstruction::Constant(1),
+        ]
     );
 }
 
