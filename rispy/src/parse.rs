@@ -19,9 +19,14 @@ fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 }
 
 fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(context("keyword", many1(is_not("\n\r )("))), |sym_str| {
-        Expr::Keyword(sym_str.into_iter().collect())
-    })(i)
+    map(
+        context("keyword", many1(is_not("\n\r )("))),
+        |char_vec| match char_vec.into_iter().collect() {
+            str if str == "true" => Expr::Boolean(true),
+            str if str == "false" => Expr::Boolean(false),
+            str => Expr::Keyword(str),
+        },
+    )(i)
 }
 
 pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
@@ -73,15 +78,15 @@ fn test_parse_alphanumerics() {
         Ok(vec![Expr::Num(nr)])
     }
 
-    assert_eq!(parse("true"), kw("true"));
+    assert_eq!(parse("true"), Ok(vec![Expr::Boolean(true)]));
+    assert_eq!(parse("false"), Ok(vec![Expr::Boolean(false)]));
     assert_eq!(parse("+"), kw("+"));
     assert_eq!(parse("'"), kw("'"));
-    assert_eq!(parse("false"), kw("false"));
     assert_eq!(parse("1"), nr(1.));
     assert_eq!(parse("5"), nr(5.));
 
-    assert_eq!(parse("  true  "), kw("true"));
-    assert_eq!(parse("  false  "), kw("false"));
+    assert_eq!(parse("  true  "), Ok(vec![Expr::Boolean(true)]));
+    assert_eq!(parse("  false  "), Ok(vec![Expr::Boolean(false)]));
     assert_eq!(parse("  1  "), nr(1.));
     assert_eq!(parse("  5  "), nr(5.));
 }
@@ -97,7 +102,10 @@ fn test_parse_quote() {
         _ => false,
     });
 
-    let res2 = parse("'(a b)").map(|x| x.first().cloned()).unwrap().unwrap();
+    let res2 = parse("'(a b)")
+        .map(|x| x.first().cloned())
+        .unwrap()
+        .unwrap();
 
     assert!(match res2 {
         Expr::Quote(box rc) => match rc {

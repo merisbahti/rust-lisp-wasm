@@ -28,6 +28,7 @@ const ExprSchema = Type.Recursive((This) =>
   Type.Union([
     Type.String(),
     Type.Object({ Num: Type.Number() }),
+    Type.Object({ Boolean: Type.Boolean() }),
     Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
     Type.Object({
       Lambda: Type.Tuple([
