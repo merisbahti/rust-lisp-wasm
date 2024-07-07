@@ -20,9 +20,15 @@ fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     }
 }
 
-fn collect_exprs_from_body(expr: &Expr) -> Result<Expr, String> {
+fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
-        Expr::Pair(box expr, box Expr::Nil) => return Ok(expr.to_owned()),
+        Expr::Pair(box expr, box Expr::Nil) => return Ok(vec![expr.to_owned()]),
+        Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
+            return collect_exprs_from_body(next).map(|mut x| {
+                x.insert(0, expr.to_owned());
+                x
+            })
+        }
         _ => Err(format!(
             "Can only compile lambdas with one expr in body, but found: {:?}",
             expr
@@ -51,13 +57,9 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         constants: vec![],
     };
 
-    let mut body_compiled = match compile(body.clone(), &mut new_body_chunk) {
-        Ok(chunk) => chunk,
-        err @ Err(_) => return err,
-    };
-    body_compiled.code.push(VMInstruction::Return);
+    compile_many_exprs(body.clone(), &mut new_body_chunk);
 
-    chunk.constants.push(Expr::Lambda(body_compiled, kws));
+    chunk.constants.push(Expr::Lambda(new_body_chunk, kws));
     chunk
         .code
         .push(VMInstruction::Constant(chunk.constants.len() - 1));
@@ -128,6 +130,20 @@ pub fn compile_internal(
         }
     };
     Ok(chunk.clone())
+}
+
+fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) {
+    exprs.iter().enumerate().for_each(|(i, expr)| {
+        match compile(expr.clone(), chunk) {
+            Ok(_) => {}
+            Err(e) => panic!("{:?}", e),
+        };
+        if i == exprs.len() - 1 {
+            chunk.code.push(VMInstruction::Return);
+        } else {
+            chunk.code.push(VMInstruction::PopStack);
+        }
+    });
 }
 
 #[test]

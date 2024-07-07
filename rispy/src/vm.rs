@@ -98,7 +98,12 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                         .drain(stack_len - arity..stack_len)
                         .collect::<Vec<Expr>>();
                     if x.len() != vars.len() {
-                        return Err("wrong number of args".to_string());
+                        return Err(format!(
+                            "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                            vars.len(),
+                            vars,
+                            x.len()
+                        ));
                     }
                     let env = vars
                         .iter()
@@ -236,8 +241,6 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
         }
     });
 
-    chunk.code.push(VMInstruction::Return);
-
     let callframe = Callframe {
         ip: 0,
         chunk,
@@ -303,5 +306,35 @@ fn compiled_test() {
             .to_string()
         ),
         Ok(Expr::Num(3.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(define fn (lambda () 
+  (define x 5)
+  (define y 7)
+  (+ x y)
+))
+(fn)
+        "
+            .to_string()
+        ),
+        Ok(Expr::Num(12.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(define x 5)
+(define y 7)
+(define fn (lambda () 
+  (+ x y)
+))
+(fn)
+        "
+            .to_string()
+        ),
+        Ok(Expr::Num(12.0))
     );
 }

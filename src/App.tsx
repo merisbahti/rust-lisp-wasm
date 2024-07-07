@@ -172,11 +172,16 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 };
 
 function App() {
-  const [value, setValue] = React.useState(`
-(define x 1)
-(define y 2)
-(+ x y)
-`);
+  const [value, setValue] = React.useState(
+    `
+(define fn (lambda (f) 
+  (define x 1)
+  (define y 2)
+  (+ x y)
+))
+(fn)
+`.trim(),
+  );
   const [expr, setExpr] = React.useState<{
     previousResult: unknown;
     result: unknown;
@@ -185,10 +190,14 @@ function App() {
   useEffect(() => {
     init()
       .then(() => {
-        setExpr(({ previousResult }) => ({
-          previousResult,
-          result: compile(value),
-        }));
+        try {
+          setExpr(({ previousResult }) => ({
+            previousResult,
+            result: compile(value),
+          }));
+        } catch (e) {
+          console.log("error");
+        }
       })
       .catch((e) =>
         setExpr(({ previousResult }) => ({
