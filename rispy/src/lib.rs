@@ -31,10 +31,7 @@ extern "C" {
 pub fn compile(expression: String) -> JsValue {
     let result: Result<VM, String> = prepare_vm(expression);
 
-    match result {
-        Ok(a) => serde_wasm_bindgen::to_value(&a).unwrap(),
-        Err(e) => JsValue::from_str(format!("{:?}", e).as_str()),
-    }
+    serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
 #[wasm_bindgen]
@@ -43,8 +40,5 @@ pub fn step(expression: JsValue) -> JsValue {
         .map_err(|e| e.to_string())
         .and_then(|x| vm::step(x));
 
-    match deserialized {
-        Ok(a) => serde_wasm_bindgen::to_value(&a).unwrap(),
-        Err(e) => JsValue::from_str(format!("{:?}", e).as_str()),
-    }
+    serde_wasm_bindgen::to_value(&deserialized).unwrap()
 }

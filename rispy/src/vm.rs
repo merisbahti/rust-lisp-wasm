@@ -7,6 +7,7 @@ use crate::{compile, expr::Expr, parse};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
     Lookup(String),
+    Define,
     Call(usize),
     Return,
     Constant(usize),
@@ -60,6 +61,12 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
     };
     callframe.ip += 1;
     match instruction {
+        VMInstruction::Define => {
+            let to_define = match vm.stack.pop() {
+                Some(to_define) => to_define,
+                None => return Err("no value to define".to_string()),
+            };
+        }
         VMInstruction::Lookup(name) => {
             let lookup = match callframe.env.get(name).or(vm.globals.get(name)) {
                 Some(instructions) => instructions,
@@ -85,6 +92,9 @@ pub fn step(mut vm: VM) -> Result<VM, String> {
                         .stack
                         .drain(stack_len - arity..stack_len)
                         .collect::<Vec<Expr>>();
+                    if x.len() != vars.len() {
+                        return Err("wrong number of args".to_string());
+                    }
                     let env = vars
                         .iter()
                         .map(|x| x.clone())

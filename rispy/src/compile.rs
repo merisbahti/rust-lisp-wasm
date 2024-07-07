@@ -73,6 +73,9 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda".to_string() => {
             return make_lambda(r, chunk);
         }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define".to_string() => {
+            chunk.code.push(VMInstruction::Define);
+        }
         Expr::Pair(box l, box r) => {
             let _ = compile_internal(l, chunk, None);
             let _ = compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));

@@ -53,13 +53,20 @@ const VM = Type.Object({
 
 type VMType = Static<typeof VM>;
 
-const parseResult = (
-  result: unknown,
-): { type: "success"; value: VMType } | { type: "error"; error: unknown } => {
+const ResultSchema = Type.Union([
+  Type.Object({ Ok: VM }),
+  Type.Object({ Err: Type.String() }),
+]);
+
+const parseResult = (result: unknown): { Ok: VMType } | { Err: string } => {
   try {
-    return { type: "success", value: Value.Decode(VM, result) };
+    return Value.Decode(ResultSchema, result);
   } catch (error) {
-    return { type: "error", error };
+    console.error(
+      "failed when serializing:",
+      Value.Errors(ResultSchema, result),
+    );
+    return { Err: "Decoding error, look at the console" };
   }
 };
 
@@ -78,10 +85,6 @@ function App() {
   }, [value]);
 
   const deserializedResult = expr !== null ? parseResult(expr) : null;
-  if (deserializedResult && deserializedResult.type === "error") {
-    console.error("failed when serializing:", deserializedResult);
-    console.error(JSON.stringify(deserializedResult.error));
-  }
 
   return (
     <div className="App">
@@ -109,10 +112,10 @@ function App() {
                 gap: "8px",
               }}
             >
-              {deserializedResult?.type === "success" ? (
+              {deserializedResult && "Ok" in deserializedResult ? (
                 <button
                   onClick={() => {
-                    setExpr(step(deserializedResult.value));
+                    setExpr(step(deserializedResult.Ok));
                   }}
                 >
                   step
@@ -121,10 +124,10 @@ function App() {
             </div>
           </div>
           <div style={{ marginLeft: "32px" }}>
-            {deserializedResult?.type === "success" ? (
-              <VMComponent vm={deserializedResult.value} />
+            {deserializedResult && "Ok" in deserializedResult ? (
+              <VMComponent vm={deserializedResult.Ok} />
             ) : (
-              "Error, see browser console"
+              deserializedResult?.Err
             )}
           </div>
         </div>
