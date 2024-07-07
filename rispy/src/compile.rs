@@ -5,7 +5,7 @@ use crate::{
     vm::{Chunk, VMInstruction},
 };
 
-pub fn compile(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     compile_internal(expr, chunk, None)
 }
 
@@ -35,14 +35,14 @@ fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
         )),
     }
 }
-fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
         otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
-    let body = match collect_exprs_from_body(&unextracted_body) {
+    let body = match collect_exprs_from_body(unextracted_body) {
         Ok(res) => res,
         Err(e) => return Err(e),
     };
@@ -73,7 +73,7 @@ fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     Ok(chunk.clone())
 }
 
-fn make_define(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     let (kw, definee) = match expr {
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
             (kw, definee)
@@ -89,7 +89,7 @@ fn make_define(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         Ok(_) => {}
         err @ Err(_) => return err,
     };
-    chunk.code.push(VMInstruction::Define(kw));
+    chunk.code.push(VMInstruction::Define(kw.to_string()));
     chunk.constants.push(Expr::Nil);
     chunk
         .code
@@ -98,42 +98,44 @@ fn make_define(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
 }
 
 pub fn compile_internal(
-    expr: Expr,
+    expr: &Expr,
     chunk: &mut Chunk,
     calling_context: Option<usize>,
 ) -> Result<Chunk, String> {
-    match expr {
+    match &expr {
         Expr::LambdaDefinition(..) => {
             todo!("Cannot compile a lambda definition (it's already compiled right?)")
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == *"lambda" => {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if *kw == *"lambda" => {
             return make_lambda(r, chunk);
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == *"define" => {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if *kw == *"define" => {
             return make_define(r, chunk);
         }
         Expr::Pair(box l, box r) => {
             let _ = compile_internal(l, chunk, None);
             let _ = compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)));
         }
-        nr @ Expr::Num(_) => {
-            chunk.constants.push(nr);
+        Expr::Num(nr) => {
+            chunk.constants.push(Expr::Num(*nr));
             let index = chunk.constants.len() - 1;
             chunk.code.push(VMInstruction::Constant(index));
         }
-        bool @ Expr::Boolean(_) => {
-            chunk.constants.push(bool);
+        Expr::Boolean(bool) => {
+            chunk.constants.push(Expr::Boolean(*bool));
             let index = chunk.constants.len() - 1;
             chunk.code.push(VMInstruction::Constant(index));
         }
         Expr::Keyword(kw) => {
-            chunk.code.push(VMInstruction::Lookup(kw));
+            chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
         Expr::Lambda(..) => panic!("Cannot compile a Lambda"),
         Expr::Quote(_) => todo!("Not yet implemented (quote)"),
         Expr::BuiltIn(_) => panic!("Cannot compile a BuiltIn"),
         Expr::Nil => {
-            if let Some(calls) = calling_context { chunk.code.push(VMInstruction::Call(calls)) };
+            if let Some(calls) = calling_context {
+                chunk.code.push(VMInstruction::Call(calls))
+            };
         }
     };
     Ok(chunk.clone())
@@ -141,7 +143,7 @@ pub fn compile_internal(
 
 pub fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) -> Result<(), String> {
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
-        match compile(expr.clone(), chunk) {
+        match compile(expr, chunk) {
             Ok(_) => {}
             Err(e) => return Err(e),
         };
@@ -163,7 +165,7 @@ fn test_simple_add_compilation() {
     };
 
     match compile(
-        crate::parse::make_pair_from_vec(vec![
+        &crate::parse::make_pair_from_vec(vec![
             Expr::Keyword("+".to_string()),
             Expr::Num(1.0),
             Expr::Num(2.0),
@@ -195,7 +197,7 @@ fn losta_compile() {
             code: vec![],
             constants: vec![],
         };
-        match compile(expr, &mut chunk) {
+        match compile(&expr, &mut chunk) {
             Ok(e) => e.code,
             Err(e) => panic!("Error: {:?}", e),
         }
@@ -283,7 +285,7 @@ fn lambda_compile_test() {
             code: vec![],
             constants: vec![],
         };
-        match compile(expr, &mut chunk) {
+        match compile(&expr, &mut chunk) {
             Ok(e) => e,
             Err(e) => panic!("Error: {:?}", e),
         }

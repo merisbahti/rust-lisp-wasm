@@ -321,27 +321,17 @@ fn jit_run(input: String) -> Result<Expr, String> {
     }
 }
 
-fn maybe_log_err<T>(res: Result<T, String>) -> Result<T, String> {
-    match res {
-        Ok(res) => Ok(res),
-        Err(err) => {
-            println!("error: {}", err);
-            Err(err)
-        }
-    }
-}
-
 #[test]
 fn compiled_test() {
-    let res = maybe_log_err(jit_run("(+ 1 2)".to_string()));
+    let res = jit_run("(+ 1 2)".to_string());
     assert_eq!(res, Ok(Expr::Num(3.0)));
-    let res = maybe_log_err(jit_run("(+ 1 (+ 2 3))".to_string()));
+    let res = jit_run("(+ 1 (+ 2 3))".to_string());
     assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = maybe_log_err(jit_run("(+ (+ 2 3) 1)".to_string()));
+    let res = jit_run("(+ (+ 2 3) 1)".to_string());
     assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = maybe_log_err(jit_run("((lambda () 1))".to_string()));
+    let res = jit_run("((lambda () 1))".to_string());
     assert_eq!(res, Ok(Expr::Num(1.0)));
-    let res = maybe_log_err(jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string()));
+    let res = jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string());
     assert_eq!(res, Ok(Expr::Num(5.0)));
 
     assert_eq!(
