@@ -37,8 +37,8 @@ fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
 }
 fn make_lambda(expr: Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     let (pairs, unextracted_body) = match expr {
-        Expr::Pair(pairs @ box Expr::Nil, box body) => (pairs, body),
-        Expr::Pair(pairs @ box Expr::Pair(_, _), box body) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
         otherwise @ _ => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
