@@ -9,6 +9,11 @@ pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let globals: HashMap<String, VMInstruction> = HashMap::from([
         ("+".to_string(), VMInstruction::Add),
         ("=".to_string(), VMInstruction::Equals),
+        ("nil?".to_string(), VMInstruction::IsNil),
+        ("pair?".to_string(), VMInstruction::IsPair),
+        ("cons".to_string(), VMInstruction::Cons),
+        ("car".to_string(), VMInstruction::Car),
+        ("cdr".to_string(), VMInstruction::Cdr),
     ]);
     compile_internal(expr, chunk, None, &globals)
 }

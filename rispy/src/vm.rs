@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{compile::compile_many_exprs, expr::Expr, parse};
+use crate::{
+    compile::compile_many_exprs,
+    expr::Expr,
+    parse::{self, make_pair_from_vec},
+};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
@@ -13,6 +17,11 @@ pub enum VMInstruction {
     If(usize),
     Call(usize),
     Return,
+    Car,
+    Cdr,
+    Cons,
+    IsNil,
+    IsPair,
     Constant(usize),
     Add,
     Equals,
@@ -238,6 +247,43 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 }
                 _ => {}
             }
+        }
+        VMInstruction::Car => {
+            let res = match vm.stack.pop() {
+                Some(Expr::Pair(box res, _)) => res,
+                _ => return Err("car requires a pair".to_string()),
+            };
+            vm.stack.push(res);
+        }
+        VMInstruction::Cdr => {
+            let res = match vm.stack.pop() {
+                Some(Expr::Pair(_, box res)) => res,
+                _ => return Err("cdr requires a pair".to_string()),
+            };
+            vm.stack.push(res);
+        }
+        VMInstruction::Cons => {
+            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(arg2), Some(arg1)) => (arg1, arg2),
+                _ => return Err("too few args for cons on stack".to_string()),
+            };
+            vm.stack.push(Expr::Pair(Box::new(arg1), Box::new(arg2)));
+        }
+        VMInstruction::IsNil => {
+            let res = match vm.stack.pop() {
+                Some(Expr::Nil) => true,
+                Some(..) => false,
+                _ => return Err("nil? requires an arg".to_string()),
+            };
+            vm.stack.push(Expr::Boolean(res));
+        }
+        VMInstruction::IsPair => {
+            let res = match vm.stack.pop() {
+                Some(Expr::Pair(..)) => true,
+                Some(..) => false,
+                _ => return Err("pair? requires an arg".to_string()),
+            };
+            vm.stack.push(Expr::Boolean(res));
         }
     }
     Ok(())
@@ -476,5 +522,23 @@ fn compiled_test() {
                 .to_string()
         ),
         Ok(Expr::Num(89.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(define map (lambda (proc items)
+  (if 
+    (nil? items) 
+    '()
+    (cons (proc (car items)) (map proc (cdr items))))))
+(map (lambda (x) (+ 1 x)) '(1 2 3))"
+                .to_string()
+        ),
+        Ok(make_pair_from_vec(vec![
+            Expr::Num(2.0),
+            Expr::Num(3.0),
+            Expr::Num(4.0)
+        ]))
     );
 }
