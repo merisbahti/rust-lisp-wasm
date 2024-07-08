@@ -470,17 +470,31 @@ fn compiled_test() {
     assert_eq!(
         jit_run(
             "
-(define fib (lambda ( n) 
-  (fib-iter 1 0 n)) )
+(define fib (lambda (n) 
+  (fib-iter 1 0 n)))
 (define fib-iter (lambda (a b count)
 (if (= count 0)
-      b
-      (fib-iter (+ a b) a (+ count -1)))
-)
-  )
+  b
+  (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
                 .to_string()
         ),
         Ok(Expr::Num(2.880067194370816e18))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+(define fib (lambda (n) 
+  (if 
+  (= n 0) 1
+  (if (= n 1) 1
+    (+ (fib (+ n -1)) (fib (+ n -2)))  )
+  )))
+  
+(fib 10)"
+                .to_string()
+        ),
+        Ok(Expr::Num(89.0))
     );
 }
