@@ -47,9 +47,16 @@ fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 }
 
 fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(context("quote", preceded(tag("'"), parse_expr)), |exprs| {
-        Expr::Quote(Box::new(exprs))
-    })(i)
+    map(
+        context(
+            "quote",
+            preceded(
+                tag("'"),
+                alt((parse_quote, parse_list, parse_number, parse_keyword)),
+            ),
+        ),
+        |exprs| Expr::Quote(Box::new(exprs)),
+    )(i)
 }
 
 fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
