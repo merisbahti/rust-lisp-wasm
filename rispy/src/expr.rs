@@ -21,7 +21,6 @@ pub enum Expr {
     ),
     LambdaDefinition(Chunk, Vec<String>),
     Nil,
-    BuiltIn(Vec<VMInstruction>),
 }
 
 impl Display for Expr {
@@ -42,7 +41,6 @@ impl Display for Expr {
             Expr::LambdaDefinition(xs, vars) => {
                 write!(formatter, "LambdaDefinition({xs:?}, {vars:?})")
             }
-            Expr::BuiltIn(_) => write!(formatter, "BuiltIn(...)"),
         }
     }
 }

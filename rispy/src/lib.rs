@@ -1,5 +1,6 @@
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)]
+#![feature(if_let_guard)]
 extern crate cfg_if;
 extern crate nom;
 extern crate wasm_bindgen;

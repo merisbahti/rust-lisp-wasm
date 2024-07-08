@@ -35,7 +35,6 @@ pub struct Callframe {
 pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
-    pub globals: HashMap<String, Expr>,
     pub envs: HashMap<String, Env>,
 }
 
@@ -120,27 +119,20 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                     },
                 }
             }
-            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), envs)
-                .or(vm.globals.get(name).cloned())
-            {
-                Some(instructions) => instructions,
+
+            match lookup_env(name.to_string(), callframe.env.clone(), envs) {
+                Some(instructions) => {
+                    vm.stack.push(instructions.clone());
+                    return Ok(());
+                }
                 None => return Err(format!("not found: {name}")),
             };
-            vm.stack.push(lookup.clone());
         }
         VMInstruction::Call(arity) => {
             let stack_len = vm.stack.len();
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             let new_callframe = match first {
-                Some(Expr::BuiltIn(instructions)) => Callframe {
-                    ip: 0,
-                    chunk: Chunk {
-                        code: instructions.clone(),
-                        constants: vec![],
-                    },
-                    env: "NONE".to_string(),
-                },
                 Some(Expr::Lambda(chunk, vars, definition_env)) => {
                     let new_env_name = (envs.len() + 1).to_string();
 
@@ -188,8 +180,8 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
         VMInstruction::Return => {
             // remove fn from stack?
             let rv = match (vm.stack.pop(), vm.stack.pop()) {
-                (Some(rv), Some(Expr::BuiltIn(_))) => rv,
                 (Some(rv), Some(Expr::Lambda(..))) => rv,
+                (Some(rv), None) => rv,
                 (Some(_), Some(not_fn)) => {
                     return Err(format!(
                         "expected fn on stack after returning, but found: {:?}",
@@ -277,21 +269,9 @@ fn test_add() {
 }
 
 fn get_initial_vm_and_chunk() -> VM {
-    let globals: HashMap<String, Expr> = HashMap::from([
-        (
-            "+".to_string(),
-            Expr::BuiltIn(vec![VMInstruction::Add, VMInstruction::Return]),
-        ),
-        (
-            "=".to_string(),
-            Expr::BuiltIn(vec![VMInstruction::Equals, VMInstruction::Return]),
-        ),
-    ]);
-
     VM {
         callframes: vec![],
-        stack: vec![Expr::BuiltIn(vec![])],
-        globals,
+        stack: vec![],
         envs: HashMap::from([(
             "initial_env".to_string(),
             Env {

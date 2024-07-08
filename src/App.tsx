@@ -29,7 +29,6 @@ const ExprSchema = Type.Recursive((This) =>
     Type.String(),
     Type.Object({ Num: Type.Number() }),
     Type.Object({ Boolean: Type.Boolean() }),
-    Type.Object({ BuiltIn: Type.Array(VMInstructionSchema) }),
     Type.Object({
       Lambda: Type.Tuple([
         Type.Object({
@@ -67,7 +66,6 @@ const Callframe = Type.Object({
 const VM = Type.Object({
   callframes: Type.Array(Callframe),
   stack: Type.Array(ExprSchema),
-  globals: Type.Record(Type.String(), ExprSchema),
 });
 
 type VMType = Static<typeof VM>;
