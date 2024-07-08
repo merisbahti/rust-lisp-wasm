@@ -153,7 +153,6 @@ pub fn compile_internal(
         &Expr::Pair(box Expr::Keyword(kw), box r) if let Some(instr) = globals.get(kw) => {
             for expr in  collect_exprs_from_body(r)? {
                 compile_internal(&expr, chunk, None, globals)?;
-
             }
             chunk.code.push(instr.clone());
         }
@@ -175,7 +174,11 @@ pub fn compile_internal(
             chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
         Expr::Lambda(..) => panic!("Cannot compile a Lambda"),
-        Expr::Quote(_) => todo!("Not yet implemented (quote)"),
+        Expr::Quote(box expr) => {
+            chunk.constants.push(expr.clone());
+            let index = chunk.constants.len() - 1;
+            chunk.code.push(VMInstruction::Constant(index));
+        },
         Expr::Nil => {
             if let Some(calls) = calling_context {
                 chunk.code.push(VMInstruction::Call(calls))

@@ -39,7 +39,9 @@ const ExprSchema = Type.Recursive((This) =>
         Type.String(),
       ]),
     }),
-
+    Type.Object({
+      Pair: Type.Tuple([This, This]),
+    }),
     Type.Object({
       LambdaDefinition: Type.Tuple([
         Type.Object({
