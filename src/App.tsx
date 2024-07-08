@@ -28,6 +28,7 @@ const ExprSchema = Type.Recursive((This) =>
   Type.Union([
     Type.String(),
     Type.Object({ Num: Type.Number() }),
+    Type.Object({ Keyword: Type.String() }),
     Type.Object({ Boolean: Type.Boolean() }),
     Type.Object({
       Lambda: Type.Tuple([
