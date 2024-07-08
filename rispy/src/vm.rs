@@ -104,7 +104,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             fn lookup_env(
                 name: String,
                 env_name: String,
-                envs: HashMap<String, Env>,
+                envs: &HashMap<String, Env>,
             ) -> Option<Expr> {
                 let env = match envs.get(&env_name) {
                     Some(env) => env,
@@ -120,7 +120,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                     },
                 }
             }
-            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), envs.clone())
+            let lookup = match lookup_env(name.to_string(), callframe.env.clone(), envs)
                 .or(vm.globals.get(name).cloned())
             {
                 Some(instructions) => instructions,
