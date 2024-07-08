@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import "./App.css";
 import init, { compile, step, run } from "rispy";
-import { Static, Type } from "@sinclair/typebox";
+import { Expression, Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
 const VMInstructionSchema = Type.Union([
@@ -53,6 +53,36 @@ const ExprSchema = Type.Recursive((This) =>
     }),
   ]),
 );
+type Expr = Static<typeof ExprSchema>;
+
+const renderExpr = (expr: Expr, showParens: boolean = true): string => {
+  if (typeof expr === "string") {
+    return expr;
+  }
+  if ("Num" in expr) {
+    return String(expr.Num.toString());
+  }
+  if ("Boolean" in expr) {
+    return String(expr.Boolean.toString());
+  }
+  if ("Pair" in expr) {
+    const lastIsNil = expr.Pair[1] === "Nil";
+    const next = expr.Pair[1];
+    const nextIsPair = typeof next == "object" && "Pair" in next;
+    const cdr = lastIsNil
+      ? ""
+      : nextIsPair
+        ? ` ${renderExpr(expr.Pair[1], false)}`
+        : ` . ${renderExpr(next)}`;
+    return `${showParens ? "(" : ""}${renderExpr(expr.Pair[0])}${cdr}${showParens ? ")" : ""}`;
+  }
+  let entries = Object.entries(expr);
+  let first = entries.at(0);
+  if (first) {
+    return `${first[0]}(${first[1]})`;
+  }
+  return "unknown";
+};
 
 const ChunkSchema = Type.Recursive((_) =>
   Type.Object({
@@ -113,15 +143,7 @@ const VMInstructionComp = ({
 
 const StackComp = ({ stackItem }: { stackItem: VMType["stack"][number] }) => {
   const formatted = React.useMemo(() => {
-    if (typeof stackItem === "string") {
-      return stackItem;
-    }
-    let entries = Object.entries(stackItem);
-    let first = entries.at(0);
-    if (first) {
-      return `${first[0]}(${first[1]})`;
-    }
-    return "unknown";
+    return renderExpr(stackItem);
   }, [stackItem]);
   return (
     <div style={{ backgroundColor: "grey", padding: "4px", minWidth: "200px" }}>
@@ -189,7 +211,7 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 function App() {
   const [value, setValue] = React.useState(
     `
-(if (+ 0 0) 2 3)
+    '(1 2 3)
     `.trim(),
   );
   const [expr, setExpr] = React.useState<{
