@@ -6,14 +6,14 @@ use crate::{
 };
 
 pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
-    let globals: HashMap<String, VMInstruction> = HashMap::from([
-        ("+".to_string(), VMInstruction::Add),
-        ("=".to_string(), VMInstruction::Equals),
-        ("nil?".to_string(), VMInstruction::IsNil),
-        ("pair?".to_string(), VMInstruction::IsPair),
-        ("cons".to_string(), VMInstruction::Cons),
-        ("car".to_string(), VMInstruction::Car),
-        ("cdr".to_string(), VMInstruction::Cdr),
+    let globals: HashMap<String, (VMInstruction, usize)> = HashMap::from([
+        ("+".to_string(), (VMInstruction::Add, 2)),
+        ("=".to_string(), (VMInstruction::Equals, 2)),
+        ("nil?".to_string(), (VMInstruction::IsNil, 1)),
+        ("pair?".to_string(), (VMInstruction::IsPair, 1)),
+        ("cons".to_string(), (VMInstruction::Cons, 2)),
+        ("car".to_string(), (VMInstruction::Car, 1)),
+        ("cdr".to_string(), (VMInstruction::Cdr, 1)),
     ]);
     compile_internal(expr, chunk, None, &globals)
 }
@@ -140,7 +140,7 @@ pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
     calling_context: Option<usize>,
-    globals: &HashMap<String, VMInstruction>,
+    globals: &HashMap<String, (VMInstruction, usize)>,
 ) -> Result<(), String> {
     match &expr {
         Expr::LambdaDefinition(..) => {
@@ -155,8 +155,12 @@ pub fn compile_internal(
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
             make_if(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some(instr) = globals.get(kw) => {
-            for expr in  collect_exprs_from_body(r)? {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some((instr,arity)) = globals.get(kw) => {
+            let exprs = collect_exprs_from_body(r)?;           
+            if exprs.len() != *arity {
+                return Err(format!("Expected {} arguments for {}, but found {}", arity, kw, exprs.len()))
+            }
+            for expr in exprs {
                 compile_internal(&expr, chunk, None, globals)?;
             }
             chunk.code.push(instr.clone());

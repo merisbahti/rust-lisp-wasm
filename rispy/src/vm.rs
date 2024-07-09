@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     compile::compile_many_exprs,
     expr::Expr,
-    parse::{self, make_pair_from_vec},
+    parse::{self},
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

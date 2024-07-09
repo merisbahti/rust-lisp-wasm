@@ -1,5 +1,4 @@
 use crate::vm::Chunk;
-use crate::vm::VMInstruction;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
