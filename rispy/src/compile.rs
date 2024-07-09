@@ -48,26 +48,17 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
-    let body = match collect_exprs_from_body(unextracted_body) {
-        Ok(res) => res,
-        Err(e) => return Err(e),
-    };
+    let body = collect_exprs_from_body(unextracted_body)? ;
 
-    let kws = match collect_kws_from_expr(pairs.borrow()) {
-        Ok(kws) => kws,
-        Err(e) => return Err(format!("{:?}", e)),
-    };
+    let kws = collect_kws_from_expr(pairs.borrow())?;
 
     let mut new_body_chunk = Chunk {
         code: vec![],
         constants: vec![],
     };
 
-    // find closing over variables
-    match compile_many_exprs(body.clone(), &mut new_body_chunk) {
-        Ok(..) => {}
-        Err(e) => return Err(e),
-    };
+ // find closing over variables
+    compile_many_exprs(body.clone(), &mut new_body_chunk)?; 
 
     chunk
         .constants
@@ -163,8 +154,8 @@ pub fn compile_internal(
             chunk.code.push(instr.clone());
         }
         Expr::Pair(box l, box r) => {
-            let _ = compile_internal(l, chunk, None, globals);
-            let _ = compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)), globals);
+            compile_internal(l, chunk, None, globals)?;
+            compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)), globals)?;
         }
         Expr::Num(nr) => {
             chunk.constants.push(Expr::Num(*nr));
