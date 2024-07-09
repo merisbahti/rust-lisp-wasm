@@ -535,7 +535,7 @@ fn compiled_test() {
 (map (lambda (x) (+ 1 x)) '(1 2 3))"
                 .to_string()
         ),
-        Ok(make_pair_from_vec(vec![
+        Ok(parse::make_pair_from_vec(vec![
             Expr::Num(2.0),
             Expr::Num(3.0),
             Expr::Num(4.0)

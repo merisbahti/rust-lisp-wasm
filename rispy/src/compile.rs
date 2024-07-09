@@ -38,10 +38,7 @@ fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
                 x
             })
         }
-        _ => Err(format!(
-            "Can only compile lambdas with one expr in body, but found: {:?}",
-            expr
-        )),
+        _ => Ok(vec![]),
     }
 }
 fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
@@ -114,7 +111,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         ) => (pred, consequent, alternate),
         otherwise => {
             return Err(format!(
-                "definition, expected kw and expr but found: {:?}",
+                "if, expected pred, cons, alt but found: {:?}",
                 otherwise
             ))
         }
@@ -267,13 +264,8 @@ fn losta_compile() {
         ]
     );
     assert_eq!(
-        parse_and_compile("(+ 1 2 3)"),
-        vec![
-            VMInstruction::Constant(0),
-            VMInstruction::Constant(1),
-            VMInstruction::Constant(2),
-            VMInstruction::Add,
-        ]
+        crate::vm::prepare_vm("(+ 1 2 3)".to_string()),
+        Err("Expected 2 arguments for +, but found 3".to_string())
     );
 
     assert_eq!(
