@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    compile::compile_many_exprs,
+    compile::{compile_many_exprs, get_globals, BuiltIn},
     expr::Expr,
-    parse::{self},
+    parse,
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -17,14 +17,8 @@ pub enum VMInstruction {
     If(usize),
     Call(usize),
     Return,
-    Car,
-    Cdr,
-    Cons,
-    IsNil,
-    IsPair,
     Constant(usize),
-    Add,
-    Equals,
+    BuiltIn(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -53,9 +47,9 @@ pub struct Chunk {
     pub constants: Vec<Expr>,
 }
 
-fn run(mut vm: VM) -> Result<VM, String> {
+fn run(mut vm: VM, globals: &HashMap<String, BuiltIn>) -> Result<VM, String> {
     loop {
-        match step(&mut vm) {
+        match step(&mut vm, globals) {
             Err(err) => return Err(err),
             Ok(()) if vm.callframes.is_empty() => return Ok(vm),
             Ok(()) => {}
@@ -63,7 +57,7 @@ fn run(mut vm: VM) -> Result<VM, String> {
     }
 }
 
-pub fn step(vm: &mut VM) -> Result<(), String> {
+pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
     // let callframes = &mut vm.callframes;
     // let len = callframes.len();
     let envs = &mut vm.envs;
@@ -216,24 +210,6 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 return Err(format!("constant not found: {arg}"));
             }
         }
-        VMInstruction::Add => {
-            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
-                (Some(arg1), Some(arg2)) => (arg1, arg2),
-                _ => return Err(format!("too few args for add on stack {:?}", vm.stack)),
-            };
-
-            match (arg1, arg2) {
-                (Expr::Num(arg1), Expr::Num(arg2)) => vm.stack.push(Expr::Num(arg1 + arg2)),
-                _ => return Err("addition requires two numbers".to_string()),
-            }
-        }
-        VMInstruction::Equals => {
-            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
-                (Some(arg1), Some(arg2)) => (arg1, arg2),
-                _ => return Err("too few args for equals on stack".to_string()),
-            };
-            vm.stack.push(Expr::Boolean(arg1 == arg2));
-        }
         VMInstruction::If(alt_ip) => {
             let pred = match vm.stack.pop() {
                 Some(pred) => pred,
@@ -242,48 +218,36 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 }
             };
             match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => {
-                    callframe.ip = callframe.ip + *alt_ip
-                }
+                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => callframe.ip += *alt_ip,
                 _ => {}
             }
         }
-        VMInstruction::Car => {
-            let res = match vm.stack.pop() {
-                Some(Expr::Pair(box res, _)) => res,
-                _ => return Err("car requires a pair".to_string()),
+        VMInstruction::BuiltIn(str) if let Some(BuiltIn::OneArg(f)) = globals.get(str) => {
+            let value = match vm.stack.pop() {
+                Some(pred) => pred,
+                found_vals => {
+                    return Err(format!(
+                        "too few args for if on stack for ({:?}): {:?}",
+                        str, found_vals
+                    ))
+                }
             };
-            vm.stack.push(res);
+            vm.stack.push(f(&value)?);
         }
-        VMInstruction::Cdr => {
-            let res = match vm.stack.pop() {
-                Some(Expr::Pair(_, box res)) => res,
-                _ => return Err("cdr requires a pair".to_string()),
+        VMInstruction::BuiltIn(str) if let Some(BuiltIn::TwoArg(f)) = globals.get(str) => {
+            let (top, bot) = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(bot), Some(top)) => (top, bot),
+                found_vals => {
+                    return Err(format!(
+                        "too few args for if on stack for ({:?}): {:?}",
+                        str, found_vals
+                    ))
+                }
             };
-            vm.stack.push(res);
+            vm.stack.push(f(&top, &bot)?);
         }
-        VMInstruction::Cons => {
-            let (arg1, arg2) = match (vm.stack.pop(), vm.stack.pop()) {
-                (Some(arg2), Some(arg1)) => (arg1, arg2),
-                _ => return Err("too few args for cons on stack".to_string()),
-            };
-            vm.stack.push(Expr::Pair(Box::new(arg1), Box::new(arg2)));
-        }
-        VMInstruction::IsNil => {
-            let res = match vm.stack.pop() {
-                Some(Expr::Nil) => true,
-                Some(..) => false,
-                _ => return Err("nil? requires an arg".to_string()),
-            };
-            vm.stack.push(Expr::Boolean(res));
-        }
-        VMInstruction::IsPair => {
-            let res = match vm.stack.pop() {
-                Some(Expr::Pair(..)) => true,
-                Some(..) => false,
-                _ => return Err("pair? requires an arg".to_string()),
-            };
-            vm.stack.push(Expr::Boolean(res));
+        VMInstruction::BuiltIn(name) => {
+            return Err(format!("unknown built-in: {name}"));
         }
     }
     Ok(())
@@ -294,7 +258,7 @@ fn test_add() {
         code: vec![
             VMInstruction::Constant(0),
             VMInstruction::Constant(1),
-            VMInstruction::Add,
+            VMInstruction::BuiltIn("+".to_string()),
             VMInstruction::Return,
         ],
         constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
@@ -309,7 +273,7 @@ fn test_add() {
     let mut vm = get_initial_vm_and_chunk();
     vm.callframes.push(callframe);
 
-    let result = run(vm);
+    let result = run(vm, &get_globals());
 
     debug_assert_eq!(result.map(|x| x.stack), Ok(vec![Expr::Num(3.0)],))
 }
@@ -362,7 +326,7 @@ pub fn jit_run(input: String) -> Result<Expr, String> {
         Err(err) => return Result::Err(err),
     };
 
-    let interpreted = match run(vm) {
+    let interpreted = match run(vm, &get_globals()) {
         Ok(e) => e,
         Err(err) => return Result::Err(err),
     };

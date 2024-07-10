@@ -10,9 +10,8 @@ mod expr;
 mod parse;
 mod vm;
 
-use std::collections::HashMap;
-
 use cfg_if::cfg_if;
+use compile::get_globals;
 use vm::{prepare_vm, VM};
 use wasm_bindgen::prelude::*;
 
@@ -58,7 +57,7 @@ pub fn step(expression: JsValue) -> JsValue {
         serde_wasm_bindgen::from_value(expression).map_err(|e| e.to_string());
 
     let res = match deserialized {
-        Ok(mut x) => match vm::step(&mut x) {
+        Ok(mut x) => match vm::step(&mut x, &get_globals()) {
             Ok(..) => Ok(x),
             Err(err) => Err(err),
         },

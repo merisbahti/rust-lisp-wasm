@@ -5,16 +5,68 @@ use crate::{
     vm::{Chunk, VMInstruction},
 };
 
+pub enum BuiltIn {
+    OneArg(fn(&Expr) -> Result<Expr, String>),
+    TwoArg(fn(&Expr, &Expr) -> Result<Expr, String>),
+}
+
+pub fn builtin_arity(builtin: &BuiltIn) -> usize {
+    match builtin {
+        BuiltIn::OneArg(..) => 1,
+        BuiltIn::TwoArg(..) => 2,
+    }
+}
+
+pub fn get_globals() -> HashMap<String, BuiltIn> {
+    HashMap::from([
+        (
+            "nil?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Nil => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
+            "pair?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Nil | Expr::Pair(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
+            "+".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "=".to_string(),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::Boolean(l == r))),
+        ),
+        (
+            "cons".to_string(),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::Pair(Box::new(l.clone()), Box::new(r.clone())))),
+        ),
+        (
+            "car".to_string(),
+            BuiltIn::OneArg(|pair| match pair {
+                Expr::Pair(box l, ..) => Ok(l.clone()),
+                _ => Err(format!("car expected pair, found: {:?}", pair)),
+            }),
+        ),
+        (
+            "cdr".to_string(),
+            BuiltIn::OneArg(|pair| match pair {
+                Expr::Pair(.., box r) => Ok(r.clone()),
+                _ => Err(format!("cdr expected pair, found: {:?}", pair)),
+            }),
+        ),
+    ])
+}
+
 pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
-    let globals: HashMap<String, (VMInstruction, usize)> = HashMap::from([
-        ("+".to_string(), (VMInstruction::Add, 2)),
-        ("=".to_string(), (VMInstruction::Equals, 2)),
-        ("nil?".to_string(), (VMInstruction::IsNil, 1)),
-        ("pair?".to_string(), (VMInstruction::IsPair, 1)),
-        ("cons".to_string(), (VMInstruction::Cons, 2)),
-        ("car".to_string(), (VMInstruction::Car, 1)),
-        ("cdr".to_string(), (VMInstruction::Cdr, 1)),
-    ]);
+    let globals = get_globals();
     compile_internal(expr, chunk, &globals)
 }
 
@@ -126,7 +178,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
-    globals: &HashMap<String, (VMInstruction, usize)>,
+    globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     match &expr {
         Expr::LambdaDefinition(..) => {
@@ -141,9 +193,10 @@ pub fn compile_internal(
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
             make_if(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some((instr, arity)) = globals.get(kw) => {
+        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
-            if exprs.len() != *arity {
+            let arity = builtin_arity(builtin);
+            if exprs.len() != arity {
                 return Err(format!(
                     "Expected {} arguments for {}, but found {}",
                     arity,
@@ -154,14 +207,13 @@ pub fn compile_internal(
             for expr in exprs {
                 compile_internal(&expr, chunk, globals)?;
             }
-            chunk.code.push(instr.clone());
+            chunk.code.push(VMInstruction::BuiltIn(kw.clone()));
         }
-        pair @ Expr::Pair(box l, box r) => {
+        Expr::Pair(box l, box r) => {
             let exprs = collect_exprs_from_body(r)?;
             compile_internal(l, chunk, globals)?;
-            println!("pair: {:?}", pair);
-            for (i, expr) in exprs.iter().enumerate() {
-                compile_internal(&expr, chunk, globals)?;
+            for expr in exprs.iter() {
+                compile_internal(expr, chunk, globals)?;
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
@@ -233,7 +285,7 @@ fn test_simple_add_compilation() {
             code: vec![
                 VMInstruction::Constant(0),
                 VMInstruction::Constant(1),
-                VMInstruction::Add,
+                VMInstruction::BuiltIn("+".to_string()),
             ],
             constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
         }
@@ -259,7 +311,7 @@ fn losta_compile() {
         vec![
             VMInstruction::Constant(0),
             VMInstruction::Constant(1),
-            VMInstruction::Add,
+            VMInstruction::BuiltIn("+".to_string()),
         ]
     );
     assert_eq!(
@@ -288,7 +340,7 @@ fn losta_compile() {
             VMInstruction::Call(1),
             VMInstruction::Constant(0),
             VMInstruction::Constant(1),
-            VMInstruction::Add,
+            VMInstruction::BuiltIn("+".to_string()),
             VMInstruction::Constant(2),
             VMInstruction::Call(2),
         ]

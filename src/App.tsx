@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import "./App.css";
 import init, { compile, step, run } from "rispy";
-import { Expression, Static, Type } from "@sinclair/typebox";
+import { Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
 const VMInstructionSchema = Type.Union([
@@ -10,6 +10,9 @@ const VMInstructionSchema = Type.Union([
   }),
   Type.Object({
     Lookup: Type.String(),
+  }),
+  Type.Object({
+    BuiltIn: Type.String(),
   }),
   Type.Object({
     Call: Type.Number(),
