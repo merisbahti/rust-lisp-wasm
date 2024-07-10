@@ -100,6 +100,7 @@ const Callframe = Type.Object({
 const VM = Type.Object({
   callframes: Type.Array(Callframe),
   stack: Type.Array(ExprSchema),
+  envs: Type.Record(Type.String(), ExprSchema),
 });
 
 type VMType = Static<typeof VM>;
@@ -245,7 +246,15 @@ function App() {
     expr.previousResult !== null ? parseResult(expr.previousResult) : null;
   const deserializedResult =
     expr.result !== null ? parseResult(expr.result) : null;
-  console.log(JSON.stringify(deserializedResult, null, 2));
+  console.log(
+    JSON.stringify(
+      deserializedResult && "Ok" in deserializedResult
+        ? deserializedResult.Ok
+        : null,
+      null,
+      2,
+    ),
+  );
 
   return (
     <div className="App">
@@ -278,6 +287,7 @@ function App() {
                 <button
                   onClick={() => {
                     setExpr(() => {
+                      console.log("sending: ", deserializedResult.Ok);
                       return {
                         previousResult: deserializedResult,
                         result: step(deserializedResult.Ok),

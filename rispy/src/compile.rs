@@ -15,7 +15,7 @@ pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         ("car".to_string(), (VMInstruction::Car, 1)),
         ("cdr".to_string(), (VMInstruction::Cdr, 1)),
     ]);
-    compile_internal(expr, chunk, None, &globals)
+    compile_internal(expr, chunk, &globals)
 }
 
 fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
@@ -48,7 +48,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
-    let body = collect_exprs_from_body(unextracted_body)? ;
+    let body = collect_exprs_from_body(unextracted_body)?;
 
     let kws = collect_kws_from_expr(pairs.borrow())?;
 
@@ -57,8 +57,8 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         constants: vec![],
     };
 
- // find closing over variables
-    compile_many_exprs(body.clone(), &mut new_body_chunk)?; 
+    // find closing over variables
+    compile_many_exprs(body.clone(), &mut new_body_chunk)?;
 
     chunk
         .constants
@@ -114,9 +114,8 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     compile(consequent, &mut cons_chunk)?;
     compile(pred, chunk)?;
     chunk.code.push(VMInstruction::If(
-        cons_chunk.code.len()   
-            // one extra return for consequent
-            + 1,
+        cons_chunk.code.len() + 1,
+        // one extra return for consequent
     ));
     compile(consequent, chunk)?;
     chunk.code.push(VMInstruction::Return);
@@ -127,7 +126,6 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
-    calling_context: Option<usize>,
     globals: &HashMap<String, (VMInstruction, usize)>,
 ) -> Result<(), String> {
     match &expr {
@@ -135,7 +133,7 @@ pub fn compile_internal(
             todo!("Cannot compile a lambda definition (it's already compiled right?)")
         }
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
-             make_lambda(r, chunk)?;
+            make_lambda(r, chunk)?;
         }
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             make_define(r, chunk)?;
@@ -143,19 +141,29 @@ pub fn compile_internal(
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
             make_if(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some((instr,arity)) = globals.get(kw) => {
-            let exprs = collect_exprs_from_body(r)?;           
+        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some((instr, arity)) = globals.get(kw) => {
+            let exprs = collect_exprs_from_body(r)?;
             if exprs.len() != *arity {
-                return Err(format!("Expected {} arguments for {}, but found {}", arity, kw, exprs.len()))
+                return Err(format!(
+                    "Expected {} arguments for {}, but found {}",
+                    arity,
+                    kw,
+                    exprs.len()
+                ));
             }
             for expr in exprs {
-                compile_internal(&expr, chunk, None, globals)?;
+                compile_internal(&expr, chunk, globals)?;
             }
             chunk.code.push(instr.clone());
         }
-        Expr::Pair(box l, box r) => {
-            compile_internal(l, chunk, None, globals)?;
-            compile_internal(r, chunk, calling_context.map(|x| x + 1).or(Some(0)), globals)?;
+        pair @ Expr::Pair(box l, box r) => {
+            let exprs = collect_exprs_from_body(r)?;
+            compile_internal(l, chunk, globals)?;
+            println!("pair: {:?}", pair);
+            for (i, expr) in exprs.iter().enumerate() {
+                compile_internal(&expr, chunk, globals)?;
+            }
+            chunk.code.push(VMInstruction::Call(exprs.len()));
         }
         Expr::Num(nr) => {
             chunk.constants.push(Expr::Num(*nr));
@@ -175,11 +183,11 @@ pub fn compile_internal(
             chunk.constants.push(expr.clone());
             let index = chunk.constants.len() - 1;
             chunk.code.push(VMInstruction::Constant(index));
-        },
+        }
         Expr::Nil => {
-            if let Some(calls) = calling_context {
-                chunk.code.push(VMInstruction::Call(calls))
-            };
+            chunk.constants.push(Expr::Nil);
+            let index = chunk.constants.len() - 1;
+            chunk.code.push(VMInstruction::Constant(index));
         }
     };
     Ok(())
@@ -217,7 +225,7 @@ fn test_simple_add_compilation() {
         &mut initial_chunk,
     ) {
         Ok(_) => {}
-        Err(e) => panic!("Error: {:?}", e),
+        Err(e) => panic!("Error {:?}", e),
     };
     assert_eq!(
         initial_chunk,
@@ -242,7 +250,7 @@ fn losta_compile() {
         };
         match compile(&expr, &mut chunk) {
             Ok(..) => chunk.code,
-            Err(e) => panic!("Error: {:?}", e),
+            Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
         }
     }
 
@@ -285,7 +293,8 @@ fn losta_compile() {
             VMInstruction::Call(2),
         ]
     );
-    assert_eq!(parse_and_compile("()"), vec![]);
+    assert_eq!(parse_and_compile("()"), vec![VMInstruction::Constant(0)]);
+
     assert_eq!(
         parse_and_compile("(f)"),
         vec![
