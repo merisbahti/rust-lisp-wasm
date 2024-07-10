@@ -34,6 +34,34 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "number?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Num(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
+            "boolean?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Boolean(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
+            "function?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Lambda(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
+            "symbol?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Keyword(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
             "+".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
@@ -41,8 +69,57 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "*".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l * r)),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "/".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l / r)),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "%".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l % r)),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "^".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l.powf(*r))),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
             "=".to_string(),
             BuiltIn::TwoArg(|l, r| Ok(Expr::Boolean(l == r))),
+        ),
+        (
+            "and".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Boolean(l), Expr::Boolean(r)) => Ok(Expr::Boolean(*l && *r)),
+                _ => Err(format!("Expected boolean, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "or".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Boolean(l), Expr::Boolean(r)) => Ok(Expr::Boolean(*l || *r)),
+                _ => Err(format!("Expected boolean, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "not".to_string(),
+            BuiltIn::OneArg(|arg| match arg {
+                Expr::Boolean(arg) => Ok(Expr::Boolean(!arg)),
+                _ => Err(format!("Expected boolean, found: {:?}", arg)),
+            }),
         ),
         (
             "cons".to_string(),
