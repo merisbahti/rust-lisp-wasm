@@ -267,10 +267,10 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             make_define(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
             make_if(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
             let arity = builtin_arity(builtin);
             if exprs.len() != arity {
