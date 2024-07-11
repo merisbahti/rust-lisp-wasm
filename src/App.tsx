@@ -215,11 +215,7 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 };
 
 function App() {
-  const [value, setValue] = React.useState(
-    `
-    '(1 2 3)
-    `.trim(),
-  );
+  const [value, setValue] = React.useState(`(define (f x) (+ 1 2))`.trim());
   const [expr, setExpr] = React.useState<{
     previousResult: unknown;
     result: unknown;

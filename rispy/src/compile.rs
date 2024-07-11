@@ -207,22 +207,26 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
 }
 
 fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
-    let (kw, definee) = match expr {
+    let kw = match expr {
+        Expr::Pair(
+            box Expr::Pair(box Expr::Keyword(fn_name), fn_args),
+            body @ box Expr::Pair(..),
+        ) => {
+            // this is a lambda definition
+            // kws should contain a fn name and then its args
+            make_lambda(&Expr::Pair(fn_args.clone(), body.clone()), chunk)?;
+            Ok(fn_name.clone())
+        }
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
-            (kw, definee)
+            compile(definee, chunk)?;
+            Ok(kw.clone())
         }
-        otherwise => {
-            return Err(format!(
-                "definition, expected kw and expr but found: {:?}",
-                otherwise
-            ))
-        }
-    };
-    match compile(definee, chunk) {
-        Ok(_) => {}
-        err @ Err(_) => return err,
-    };
-    chunk.code.push(VMInstruction::Define(kw.to_string()));
+        otherwise => Err(format!(
+            "definition, expected kw and expr but found: {:?}",
+            otherwise
+        )),
+    }?;
+    chunk.code.push(VMInstruction::Define(kw.clone()));
     chunk.constants.push(Expr::Nil);
     chunk
         .code
