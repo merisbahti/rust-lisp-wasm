@@ -258,13 +258,13 @@ pub fn compile_internal(
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     match &expr {
-        Expr::LambdaDefinition(..) => {
-            todo!("Cannot compile a lambda definition (it's already compiled right?)")
+        expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
+            panic!("Cannot compile a {:?}", expr)
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
             make_lambda(r, chunk)?;
         }
-        &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             make_define(r, chunk)?;
         }
         &Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
@@ -307,7 +307,6 @@ pub fn compile_internal(
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
-        Expr::Lambda(..) => panic!("Cannot compile a Lambda"),
         Expr::Quote(box expr) => {
             chunk.constants.push(expr.clone());
             let index = chunk.constants.len() - 1;
