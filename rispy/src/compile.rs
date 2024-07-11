@@ -69,6 +69,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "-".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l - r)),
+                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
             "*".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l * r)),
