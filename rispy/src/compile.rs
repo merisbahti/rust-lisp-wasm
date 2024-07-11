@@ -170,7 +170,7 @@ fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
         _ => Ok(vec![]),
     }
 }
-fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
@@ -196,7 +196,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
         .code
         .push(VMInstruction::Constant(chunk.constants.len() - 1));
     chunk.code.push(VMInstruction::MakeLambda);
-    Ok(chunk.clone())
+    Ok(())
 }
 
 fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
@@ -223,7 +223,7 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     Ok(())
 }
 
-fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
+fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
             box pred,
@@ -249,7 +249,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<Chunk, String> {
     compile(consequent, chunk)?;
     chunk.code.push(VMInstruction::Return);
     compile(alternate, chunk)?;
-    Ok(chunk.clone())
+    Ok(())
 }
 
 pub fn compile_internal(

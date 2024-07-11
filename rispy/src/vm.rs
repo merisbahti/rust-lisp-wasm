@@ -47,11 +47,11 @@ pub struct Chunk {
     pub constants: Vec<Expr>,
 }
 
-fn run(mut vm: VM, globals: &HashMap<String, BuiltIn>) -> Result<VM, String> {
+fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
     loop {
-        match step(&mut vm, globals) {
+        match step(vm, globals) {
             Err(err) => return Err(err),
-            Ok(()) if vm.callframes.is_empty() => return Ok(vm),
+            Ok(()) if vm.callframes.is_empty() => return Ok(()),
             Ok(()) => {}
         }
     }
@@ -273,9 +273,9 @@ fn test_add() {
     let mut vm = get_initial_vm_and_chunk();
     vm.callframes.push(callframe);
 
-    let result = run(vm, &get_globals());
+    assert!(run(&mut vm, &get_globals()).is_ok());
 
-    debug_assert_eq!(result.map(|x| x.stack), Ok(vec![Expr::Num(3.0)],))
+    debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
 }
 
 fn get_initial_vm_and_chunk() -> VM {
@@ -321,21 +321,21 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 // just for tests
 #[allow(dead_code)]
 pub fn jit_run(input: String) -> Result<Expr, String> {
-    let vm = match prepare_vm(input) {
+    let mut vm = match prepare_vm(input) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
 
-    let interpreted = match run(vm, &get_globals()) {
+    match run(&mut vm, &get_globals()) {
         Ok(e) => e,
         Err(err) => return Result::Err(err),
     };
 
-    match interpreted.stack.first() {
-        Some(top) if interpreted.stack.len() == 1 => Ok(top.clone()),
+    match vm.stack.first() {
+        Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
         _ => Result::Err(format!(
             "expected one value on the stack, got {:#?}",
-            interpreted.stack
+            vm.stack
         )),
     }
 }

@@ -290,7 +290,6 @@ function App() {
                 <button
                   onClick={() => {
                     setExpr(() => {
-                      console.log("sending: ", deserializedResult.Ok);
                       return {
                         previousResult: deserializedResult,
                         result: step(deserializedResult.Ok),
