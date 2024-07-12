@@ -6,7 +6,7 @@ import { Value } from "@sinclair/typebox/value";
 
 const VMInstructionSchema = Type.Union([
   Type.Object({
-    Constant: Type.Number(),
+    Constant: Type.Unknown(),
   }),
   Type.Object({
     Lookup: Type.String(),
@@ -38,7 +38,6 @@ const ExprSchema = Type.Recursive((This) =>
       Lambda: Type.Tuple([
         Type.Object({
           code: Type.Array(VMInstructionSchema),
-          constants: Type.Array(This),
         }),
         Type.Array(Type.String()),
         Type.String(),
@@ -51,7 +50,6 @@ const ExprSchema = Type.Recursive((This) =>
       LambdaDefinition: Type.Tuple([
         Type.Object({
           code: Type.Array(VMInstructionSchema),
-          constants: Type.Array(This),
         }),
         Type.Array(Type.String()),
       ]),
@@ -92,7 +90,6 @@ const renderExpr = (expr: Expr, showParens: boolean = true): string => {
 const ChunkSchema = Type.Recursive((_) =>
   Type.Object({
     code: Type.Array(VMInstructionSchema),
-    constants: Type.Array(ExprSchema),
   }),
 );
 const Callframe = Type.Object({
@@ -134,6 +131,10 @@ const VMInstructionComp = ({
 }) => {
   const formatted = React.useMemo(() => {
     if (typeof instr === "string") return instr;
+
+    if ("Constant" in instr) {
+      return `Const(${renderExpr(instr.Constant as Expr)})`;
+    }
 
     const entries = Object.entries(instr)[0];
 

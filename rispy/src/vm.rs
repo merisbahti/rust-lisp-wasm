@@ -17,7 +17,7 @@ pub enum VMInstruction {
     If(usize),
     Call(usize),
     Return,
-    Constant(usize),
+    Constant(Expr),
     BuiltIn(String),
 }
 
@@ -44,7 +44,6 @@ pub struct VM {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Chunk {
     pub code: Vec<VMInstruction>,
-    pub constants: Vec<Expr>,
 }
 
 fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
@@ -203,12 +202,8 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             }
         }
-        VMInstruction::Constant(arg) => {
-            if let Some(constant) = chunk.constants.get(*arg) {
-                vm.stack.push(constant.clone());
-            } else {
-                return Err(format!("constant not found: {arg}"));
-            }
+        VMInstruction::Constant(expr) => {
+            vm.stack.push(expr.clone());
         }
         VMInstruction::If(alt_ip) => {
             let pred = match vm.stack.pop() {
@@ -256,12 +251,11 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 fn test_add() {
     let chunk = Chunk {
         code: vec![
-            VMInstruction::Constant(0),
-            VMInstruction::Constant(1),
+            VMInstruction::Constant(Expr::Num(1.0)),
+            VMInstruction::Constant(Expr::Num(2.0)),
             VMInstruction::BuiltIn("+".to_string()),
             VMInstruction::Return,
         ],
-        constants: vec![Expr::Num(1.0), Expr::Num(2.0)],
     };
 
     let callframe = Callframe {
@@ -301,10 +295,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
     let mut vm = get_initial_vm_and_chunk();
 
-    let mut chunk = Chunk {
-        code: vec![],
-        constants: vec![],
-    };
+    let mut chunk = Chunk { code: vec![] };
 
     compile_many_exprs(exprs, &mut chunk)?;
 
