@@ -496,4 +496,37 @@ fn compiled_test() {
             Expr::Num(4.0)
         ]))
     );
+
+    assert_eq!(
+        jit_run("(and true true)".to_string()),
+        Ok(Expr::Boolean(true))
+    );
+    assert_eq!(
+        jit_run("(and false true)".to_string()),
+        Ok(Expr::Boolean(false))
+    );
+    assert_eq!(
+        jit_run("(and true false)".to_string()),
+        Ok(Expr::Boolean(false))
+    );
+    assert_eq!(
+        jit_run("(and false false)".to_string()),
+        Ok(Expr::Boolean(false))
+    );
+    assert_eq!(
+        jit_run("(or true true)".to_string()),
+        Ok(Expr::Boolean(true))
+    );
+    assert_eq!(
+        jit_run("(or false true)".to_string()),
+        Ok(Expr::Boolean(true))
+    );
+    assert_eq!(
+        jit_run("(or true false)".to_string()),
+        Ok(Expr::Boolean(true))
+    );
+    assert_eq!(
+        jit_run("(or false false)".to_string()),
+        Ok(Expr::Boolean(false))
+    );
 }

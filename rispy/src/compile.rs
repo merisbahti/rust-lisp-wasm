@@ -108,20 +108,6 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             BuiltIn::TwoArg(|l, r| Ok(Expr::Boolean(l == r))),
         ),
         (
-            "and".to_string(),
-            BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Boolean(l), Expr::Boolean(r)) => Ok(Expr::Boolean(*l && *r)),
-                _ => Err(format!("Expected boolean, found: {:?} and {:?}", l, r)),
-            }),
-        ),
-        (
-            "or".to_string(),
-            BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Boolean(l), Expr::Boolean(r)) => Ok(Expr::Boolean(*l || *r)),
-                _ => Err(format!("Expected boolean, found: {:?} and {:?}", l, r)),
-            }),
-        ),
-        (
             "not".to_string(),
             BuiltIn::OneArg(|arg| match arg {
                 Expr::Boolean(arg) => Ok(Expr::Boolean(!arg)),
@@ -254,6 +240,52 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     Ok(())
 }
 
+fn make_and(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+    let (l, r) = match expr {
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
+        otherwise => {
+            return Err(format!(
+                "if, expected pred, cons, alt but found: {:?}",
+                otherwise
+            ))
+        }
+    };
+    let mut r_chunk = Chunk { code: vec![] };
+    compile(r, &mut r_chunk)?;
+    compile(l, chunk)?;
+    chunk.code.push(VMInstruction::If(
+        r_chunk.code.len() + 1,
+        // one extra return for consequent
+    ));
+    chunk.code.extend_from_slice(&r_chunk.code);
+    chunk.code.push(VMInstruction::Return);
+    compile(&l, chunk)?;
+    Ok(())
+}
+
+fn make_or(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+    let (l, r) = match expr {
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
+        otherwise => {
+            return Err(format!(
+                "if, expected pred, cons, alt but found: {:?}",
+                otherwise
+            ))
+        }
+    };
+    let mut r_chunk = Chunk { code: vec![] };
+    compile(l, &mut r_chunk)?;
+    compile(l, chunk)?;
+    chunk.code.push(VMInstruction::If(
+        r_chunk.code.len() + 1,
+        // one extra return for consequent
+    ));
+    chunk.code.extend_from_slice(&r_chunk.code);
+    chunk.code.push(VMInstruction::Return);
+    compile(&r, chunk)?;
+    Ok(())
+}
+
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
@@ -271,6 +303,12 @@ pub fn compile_internal(
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
             make_if(r, chunk)?;
+        }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "and" => {
+            make_and(r, chunk)?;
+        }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
+            make_or(r, chunk)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
