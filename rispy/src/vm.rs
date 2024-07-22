@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    compile::{compile_many_exprs, get_globals, BuiltIn},
+    compile::{compile_many_exprs, get_globals, make_pairs_from_vec, BuiltIn},
     expr::Expr,
     parse,
 };
@@ -77,8 +77,10 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
         }
         VMInstruction::MakeLambda => {
             let definition_env = callframe.env.clone();
-            let (instructions, kws) = match vm.stack.pop() {
-                Some(Expr::LambdaDefinition(instructions, kws)) => (instructions, kws),
+            let (instructions, variadic, kws) = match vm.stack.pop() {
+                Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
+                    (instructions, variadic, kws)
+                }
                 stuff => {
                     return Err(format!(
                         "expected lambda definition, but found: {:?}",
@@ -87,7 +89,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             };
             vm.stack
-                .push(Expr::Lambda(instructions, kws, definition_env));
+                .push(Expr::Lambda(instructions, kws, variadic, definition_env));
         }
         VMInstruction::Define(name) => {
             let definee = match vm.stack.pop() {
@@ -135,26 +137,43 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             let new_callframe = match first {
-                Some(Expr::Lambda(chunk, vars, definition_env)) => {
+                Some(Expr::Lambda(chunk, vars, variadic, definition_env)) => {
                     let new_env_name = (envs.len() + 1).to_string();
+                    let is_variadic = variadic.is_some();
 
-                    let x = vm
+                    let args = vm
                         .stack
                         .drain(stack_len - arity..stack_len)
                         .collect::<Vec<Expr>>();
-                    if x.len() != vars.len() {
+                    if is_variadic && args.len() < vars.len() {
+                        return Err(format!(
+                            "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                            vars.len(),
+                            vars,
+                            args.len()
+                        ));
+                    }
+
+                    if !is_variadic && args.len() != vars.len() {
                         return Err(format!(
                             "wrong number of args, expected: {:?} ({:?}), got: {:?}",
                             vars.len(),
                             vars,
-                            x.len()
+                            args.len()
                         ));
                     }
-                    let map = vars
+
+                    let mut map = vars
                         .iter()
                         .cloned()
-                        .zip(x.clone())
+                        .zip(args.clone())
                         .collect::<HashMap<String, Expr>>();
+
+                    variadic.inspect(|arg_name| {
+                        let (_, pairs) = args.split_at(vars.len());
+                        map.insert(arg_name.clone(), make_pairs_from_vec(pairs.to_vec()));
+                    });
+
                     envs.insert(
                         new_env_name.to_string(),
                         Env {
@@ -528,5 +547,65 @@ fn compiled_test() {
     assert_eq!(
         jit_run("(or false false)".to_string()),
         Ok(Expr::Boolean(false))
+    );
+
+    assert_eq!(
+        jit_run("(lambda (.) stuff)".to_string()),
+        Err("rest-dot can only occur as second-to-last argument, but found: [\".\"]".to_string())
+    );
+
+    assert_eq!(
+        jit_run("(lambda (. more extra) stuff)".to_string()),
+        Err("rest-dot can only occur as second-to-last argument, but found: [\".\", \"more\", \"extra\"]".to_string())
+    );
+    assert_eq!(
+        jit_run("(lambda (. more) stuff)".to_string()),
+        Ok(Expr::Lambda(
+            Chunk {
+                code: vec![
+                    VMInstruction::Lookup("stuff".to_string()),
+                    VMInstruction::Return
+                ]
+            },
+            vec![],
+            Some("more".to_string()),
+            "initial_env".to_string()
+        ))
+    );
+
+    assert_eq!(
+        jit_run("(lambda (a b . more) stuff)".to_string()),
+        Ok(Expr::Lambda(
+            Chunk {
+                code: vec![
+                    VMInstruction::Lookup("stuff".to_string()),
+                    VMInstruction::Return
+                ]
+            },
+            vec!["a".to_string(), "b".to_string()],
+            Some("more".to_string()),
+            "initial_env".to_string()
+        ))
+    );
+
+    assert_eq!(
+        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2)".to_string()),
+        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 2".to_string())
+    );
+
+    assert_eq!(
+        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)".to_string()),
+        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 4".to_string())
+    );
+
+    assert_eq!(
+        jit_run("((lambda (. more) more) 1 2 3 4 5)".to_string()),
+        Ok(parse::make_pair_from_vec(vec![
+            Expr::Num(1.0),
+            Expr::Num(2.0),
+            Expr::Num(3.0),
+            Expr::Num(4.0),
+            Expr::Num(5.0)
+        ]))
     );
 }

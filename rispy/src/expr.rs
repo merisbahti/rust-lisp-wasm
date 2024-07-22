@@ -16,9 +16,10 @@ pub enum Expr {
     Lambda(
         Chunk,
         Vec<String>,
-        String, /* env where it was defined*/
+        Option<String>, /* variadic */
+        String,         /* env where it was defined*/
     ),
-    LambdaDefinition(Chunk, Vec<String>),
+    LambdaDefinition(Chunk, Option<String> /* variadic? */, Vec<String>),
     Nil,
 }
 
@@ -34,11 +35,14 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
             Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
             Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
-            Expr::Lambda(xs, vars, env) => {
-                write!(formatter, "Lambda({xs:?}, {vars:?}, {env:?})")
+            Expr::Lambda(xs, vars, variadic, env) => {
+                write!(formatter, "Lambda({xs:?}, {vars:?}, {variadic:?}, {env:?})")
             }
-            Expr::LambdaDefinition(xs, vars) => {
-                write!(formatter, "LambdaDefinition({xs:?}, {vars:?})")
+            Expr::LambdaDefinition(xs, variadic, vars) => {
+                write!(
+                    formatter,
+                    "LambdaDefinition({xs:?}, {variadic:?}, {vars:?})"
+                )
             }
         }
     }
@@ -80,11 +84,11 @@ impl PartialEq for Expr {
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,
-            (Expr::Lambda(c1, s1, d1), Expr::Lambda(c2, s2, d2)) => {
-                c1 == c2 && s1 == s2 && d1 == d2
+            (Expr::Lambda(c1, s1, variadic1, d1), Expr::Lambda(c2, s2, variadic2, d2)) => {
+                c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2
             }
-            (Expr::LambdaDefinition(c1, s1), Expr::LambdaDefinition(c2, s2)) => {
-                c1 == c2 && s1 == s2
+            (Expr::LambdaDefinition(c1, v1, s1), Expr::LambdaDefinition(c2, v2, s2)) => {
+                c1 == c2 && s1 == s2 && v1 == v2
             }
             _ => false,
         }

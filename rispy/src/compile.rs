@@ -2,6 +2,7 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use crate::{
     expr::Expr,
+    parse::make_pair_from_vec,
     vm::{Chunk, VMInstruction},
 };
 
@@ -140,6 +141,17 @@ pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     compile_internal(expr, chunk, &globals)
 }
 
+pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
+    match exprs.split_first() {
+        Some((head, tail)) => Expr::Pair(
+            Box::new(head.clone()),
+            Box::new(make_pair_from_vec(tail.to_vec())),
+        ),
+
+        None => Expr::Nil,
+    }
+}
+
 fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     match expr {
         Expr::Pair(box Expr::Keyword(kw), box rest) => collect_kws_from_expr(rest).map(|mut x| {
@@ -172,7 +184,28 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
 
     let body = collect_exprs_from_body(unextracted_body)?;
 
-    let kws = collect_kws_from_expr(pairs.borrow())?;
+    // all kws (including rest)
+
+    let all_kws = collect_kws_from_expr(pairs.borrow())?;
+
+    let dot_kw = all_kws
+        .iter()
+        .enumerate()
+        .find(|(_, kw)| *kw == ".")
+        .map(|(index, _)| index);
+
+    if let Some(dot_index) = dot_kw {
+        // only valid if it's the second to last argument
+        if dot_index + 2 != all_kws.len() {
+            return Err(format!(
+                "rest-dot can only occur as second-to-last argument, but found: {:?}",
+                all_kws
+            ));
+        }
+    };
+
+    let rest_arg = dot_kw.and_then(|index| all_kws.get(index + 1));
+    let (kws, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
 
     let mut new_body_chunk = Chunk { code: vec![] };
 
@@ -183,7 +216,8 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         .code
         .push(VMInstruction::Constant(Expr::LambdaDefinition(
             new_body_chunk,
-            kws,
+            rest_arg.cloned(),
+            kws.to_vec(),
         )));
     chunk.code.push(VMInstruction::MakeLambda);
     Ok(())
@@ -471,7 +505,8 @@ fn losta_compile() {
                         VMInstruction::Return
                     ],
                 },
-                vec![]
+                None,
+                vec![],
             )),
             VMInstruction::MakeLambda,
             VMInstruction::Call(0)
@@ -509,6 +544,7 @@ fn lambda_compile_test() {
                             VMInstruction::Return
                         ],
                     },
+                    None,
                     vec![],
                 )),
                 VMInstruction::MakeLambda
@@ -527,6 +563,7 @@ fn lambda_compile_test() {
                             VMInstruction::Return
                         ],
                     },
+                    None,
                     vec![],
                 )),
                 VMInstruction::MakeLambda,
