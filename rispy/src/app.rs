@@ -7,8 +7,7 @@ use yew::prelude::*;
 
 #[function_component(App)]
 pub fn app() -> Html {
-    let initial = AttrValue::from("(+ 1 2)");
-    let name_handle = use_state(|| initial.clone());
+    let name_handle = use_state(|| "(+ 1 5)".to_string());
     let name = (*name_handle).clone();
     let oninput = Callback::from({
         let name = name_handle.clone();
@@ -19,7 +18,7 @@ pub fn app() -> Html {
                 .dyn_into()
                 .unwrap_throw();
             web_sys::console::log_1(&target.value().into()); // <- can console the value.
-            name.set(AttrValue::from(target.value()));
+            name.set(target.value());
         }
     });
     html! {
