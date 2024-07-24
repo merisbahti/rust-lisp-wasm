@@ -16,6 +16,7 @@ pub enum VMInstruction {
     PopStack,
     If(usize),
     Call(usize),
+    CallBuiltIn(String),
     Return,
     Constant(Expr),
     BuiltIn(String),
@@ -74,6 +75,28 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
     match instruction {
         VMInstruction::PopStack => {
             vm.stack.pop();
+        }
+        VMInstruction::CallBuiltIn(builtin_name) => {
+            let builtin = match globals.get(builtin_name) {
+                Some(builtin_fn) => builtin_fn,
+                None => return Err(format!("no builtin named: {:?}", builtin_name)),
+            };
+            match builtin {
+                BuiltIn::OneArg(func) => {
+                    let top = match vm.stack.pop() {
+                        Some(top) => top,
+                        None => return Err(format!("Expected item on stack, but found none")),
+                    };
+                    vm.stack.push(func(&top)?);
+                }
+                BuiltIn::TwoArg(func) => {
+                    let (first, second) = match (vm.stack.pop(), vm.stack.pop()) {
+                        (Some(first), Some(second)) => (first, second),
+                        _ => return Err(format!("Expected item on stack, but found none")),
+                    };
+                    vm.stack.push(func(&first, &second)?);
+                }
+            }
         }
         VMInstruction::MakeLambda => {
             let definition_env = callframe.env.clone();
@@ -305,7 +328,7 @@ fn get_initial_vm_and_chunk() -> VM {
     }
 }
 
-pub fn prepare_vm(input: String) -> Result<VM, String> {
+pub fn prepare_vm(input: &String) -> Result<VM, String> {
     // parse, compile and run, then check what's left on the stack
     let exprs = match parse::parse(&input) {
         Ok(res) => res,
@@ -330,7 +353,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
 // just for tests
 #[allow(dead_code)]
-pub fn jit_run(input: String) -> Result<Expr, String> {
+pub fn jit_run(input: &String) -> Result<Expr, String> {
     let mut vm = match prepare_vm(input) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
@@ -352,20 +375,20 @@ pub fn jit_run(input: String) -> Result<Expr, String> {
 
 #[test]
 fn compiled_test() {
-    let res = jit_run("(+ 1 2)".to_string());
+    let res = jit_run(&"(+ 1 2)".to_string());
     assert_eq!(res, Ok(Expr::Num(3.0)));
-    let res = jit_run("(+ 1 (+ 2 3))".to_string());
+    let res = jit_run(&"(+ 1 (+ 2 3))".to_string());
     assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = jit_run("(+ (+ 2 3) 1)".to_string());
+    let res = jit_run(&"(+ (+ 2 3) 1)".to_string());
     assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = jit_run("((lambda () 1))".to_string());
+    let res = jit_run(&"((lambda () 1))".to_string());
     assert_eq!(res, Ok(Expr::Num(1.0)));
-    let res = jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string());
+    let res = jit_run(&"((lambda (a b) (+ a (+ b b))) 1 2)".to_string());
     assert_eq!(res, Ok(Expr::Num(5.0)));
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define x 1)
 (define y 2)
 (+ x y)
@@ -377,7 +400,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define fn (lambda () 
   (define x 5)
   (define y 7)
@@ -392,7 +415,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define x 5)
 (define y 7)
 (define fn (lambda () 
@@ -407,7 +430,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define x 1)
 (define fnA (lambda () 
     (+ x y)
@@ -424,7 +447,7 @@ fn compiled_test() {
     );
     assert_eq!(
         jit_run(
-            "
+            &"
 (if 1 2 3)
 "
             .to_string()
@@ -434,7 +457,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (if (+ 0 0) 2 3)
 "
             .to_string()
@@ -444,7 +467,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define f (lambda (a b) 0))
 (if (f 3 -3) 2 10)
 "
@@ -454,7 +477,7 @@ fn compiled_test() {
     );
     assert_eq!(
         jit_run(
-            "
+            &"
 (define f (lambda (x)
   (if x (f (+ x -1)) x
   )))
@@ -464,12 +487,12 @@ fn compiled_test() {
         ),
         Ok(Expr::Num(0.0))
     );
-    assert_eq!(jit_run("(= 1 1)".to_string()), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(= 1 10)".to_string()), Ok(Expr::Boolean(false)));
+    assert_eq!(jit_run(&"(= 1 1)".to_string()), Ok(Expr::Boolean(true)));
+    assert_eq!(jit_run(&"(= 1 10)".to_string()), Ok(Expr::Boolean(false)));
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define fib (lambda (n) 
   (fib-iter 1 0 n)))
 (define fib-iter (lambda (a b count)
@@ -484,7 +507,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define fib (lambda (n) 
   (if 
   (= n 0) 1
@@ -500,7 +523,7 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run(
-            "
+            &"
 (define map (lambda (proc items)
   (if 
     (nil? items) 
@@ -517,49 +540,49 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(and true true)".to_string()),
+        jit_run(&"(and true true)".to_string()),
         Ok(Expr::Boolean(true))
     );
     assert_eq!(
-        jit_run("(and false true)".to_string()),
+        jit_run(&"(and false true)".to_string()),
         Ok(Expr::Boolean(false))
     );
     assert_eq!(
-        jit_run("(and true false)".to_string()),
+        jit_run(&"(and true false)".to_string()),
         Ok(Expr::Boolean(false))
     );
     assert_eq!(
-        jit_run("(and false false)".to_string()),
+        jit_run(&"(and false false)".to_string()),
         Ok(Expr::Boolean(false))
     );
     assert_eq!(
-        jit_run("(or true true)".to_string()),
+        jit_run(&"(or true true)".to_string()),
         Ok(Expr::Boolean(true))
     );
     assert_eq!(
-        jit_run("(or false true)".to_string()),
+        jit_run(&"(or false true)".to_string()),
         Ok(Expr::Boolean(true))
     );
     assert_eq!(
-        jit_run("(or true false)".to_string()),
+        jit_run(&"(or true false)".to_string()),
         Ok(Expr::Boolean(true))
     );
     assert_eq!(
-        jit_run("(or false false)".to_string()),
+        jit_run(&"(or false false)".to_string()),
         Ok(Expr::Boolean(false))
     );
 
     assert_eq!(
-        jit_run("(lambda (.) stuff)".to_string()),
+        jit_run(&"(lambda (.) stuff)".to_string()),
         Err("rest-dot can only occur as second-to-last argument, but found: [\".\"]".to_string())
     );
 
     assert_eq!(
-        jit_run("(lambda (. more extra) stuff)".to_string()),
+        jit_run(&"(lambda (. more extra) stuff)".to_string()),
         Err("rest-dot can only occur as second-to-last argument, but found: [\".\", \"more\", \"extra\"]".to_string())
     );
     assert_eq!(
-        jit_run("(lambda (. more) stuff)".to_string()),
+        jit_run(&"(lambda (. more) stuff)".to_string()),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
@@ -574,7 +597,7 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(lambda (a b . more) stuff)".to_string()),
+        jit_run(&"(lambda (a b . more) stuff)".to_string()),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
@@ -589,17 +612,17 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2)".to_string()),
+        jit_run(&"((lambda (a b c) (+ (+ a b) c)) 1 2)".to_string()),
         Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 2".to_string())
     );
 
     assert_eq!(
-        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)".to_string()),
+        jit_run(&"((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)".to_string()),
         Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 4".to_string())
     );
 
     assert_eq!(
-        jit_run("((lambda (. more) more) 1 2 3 4 5)".to_string()),
+        jit_run(&"((lambda (. more) more) 1 2 3 4 5)".to_string()),
         Ok(parse::make_pair_from_vec(vec![
             Expr::Num(1.0),
             Expr::Num(2.0),

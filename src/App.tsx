@@ -39,6 +39,7 @@ const ExprSchema = Type.Recursive((This) =>
         Type.Object({
           code: Type.Array(VMInstructionSchema),
         }),
+        Type.Union([Type.Null(), Type.String()]),
         Type.Array(Type.String()),
         Type.String(),
       ]),
@@ -216,7 +217,10 @@ const VMComponent = ({ vm }: { vm: VMType }) => {
 };
 
 function App() {
-  const [value, setValue] = React.useState(`(define (f x) (+ 1 2))`.trim());
+  const [value, setValue] = React.useState(
+    `(define (add a b) (+ a b))
+    (apply add 1 2)`.trim(),
+  );
   const [expr, setExpr] = React.useState<{
     previousResult: unknown;
     result: unknown;
