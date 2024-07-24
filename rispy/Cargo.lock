@@ -850,6 +850,7 @@ dependencies = [
  "console_error_panic_hook",
  "gloo 0.11.0",
  "gloo-console 0.3.0",
+ "gloo-events 0.2.0",
  "nom",
  "serde",
  "serde-wasm-bindgen 0.6.5",
