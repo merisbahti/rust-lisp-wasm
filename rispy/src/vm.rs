@@ -47,7 +47,7 @@ pub struct Chunk {
     pub code: Vec<VMInstruction>,
 }
 
-fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
+pub fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
     loop {
         match step(vm, globals) {
             Err(err) => return Err(err),

@@ -1,5 +1,8 @@
 use crate::compile::get_globals;
 use crate::vm;
+use crate::vm::jit_run;
+use crate::vm::prepare_vm;
+use crate::vm::run;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::UnwrapThrowExt;
@@ -40,21 +43,9 @@ pub fn app() -> Html {
         }
     });
 
-    let oninput2 = Callback::from({
-        let name_handle = source_handle.clone();
-        move |input_event: InputEvent| {
-            let target: HtmlTextAreaElement = input_event
-                .target()
-                .unwrap_throw()
-                .dyn_into()
-                .unwrap_throw();
-            web_sys::console::log_1(&target.value().into()); // <- can console the value.
-            name_handle.set(target.value());
-        }
-    });
-
     let step = Callback::from({
         let new_vm = vm.clone();
+        let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
             match &new_vm.clone() {
                 Ok(stuff) => {
@@ -74,6 +65,24 @@ pub fn app() -> Html {
         }
     });
 
+    let run = Callback::from({
+        let source = source.clone();
+        let vm_handle = vm_handle.clone();
+        move |_stuff: MouseEvent| {
+            let mut vm = match prepare_vm(&source) {
+                Ok(res) => res,
+                Err(message) => {
+                    &vm_handle.set(Err(message.to_string()));
+                    return;
+                }
+            };
+            match run(&mut vm, &get_globals()) {
+                Ok(_) => vm_handle.set(Ok(vm.clone())),
+                Err(message) => vm_handle.set(Err(message.to_string())),
+            }
+        }
+    });
+
     html! {
         <main>
             <div style="display: flex; gap: 8px;">
@@ -81,7 +90,7 @@ pub fn app() -> Html {
                     <textarea rows=10 {oninput} value={source} />
                     <div style="display: flex; gap: 8px">
                         <button onclick={step} style="flex-grow: 1;">{ "step" }</button>
-                        <button style="flex-grow: 1;">{ "run" }</button>
+                        <button onclick={run} style="flex-grow: 1;">{ "run" }</button>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
