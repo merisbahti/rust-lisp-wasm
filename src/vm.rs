@@ -631,4 +631,15 @@ fn compiled_test() {
             Expr::Num(5.0)
         ]))
     );
+
+    assert_eq!(
+        jit_run("(defmacro (m a) (list + a 2)) (macro-m 2)".to_string()),
+        Ok(parse::make_pair_from_vec(vec![
+            Expr::Num(1.0),
+            Expr::Num(2.0),
+            Expr::Num(3.0),
+            Expr::Num(4.0),
+            Expr::Num(5.0)
+        ]))
+    );
 }

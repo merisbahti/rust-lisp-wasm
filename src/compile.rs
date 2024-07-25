@@ -223,6 +223,61 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     Ok(())
 }
 
+fn make_macro(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+    let (macro_name, pairs, unextracted_body) = match expr {
+        Expr::Pair(
+            box Expr::Pair(box Expr::Keyword(macro_name), box pairs),
+            body @ box Expr::Pair(..),
+        ) => (macro_name, pairs, body),
+        otherwise => return Err(format!("Invalid macro definition: {:?}", otherwise)),
+    };
+
+    let body = collect_exprs_from_body(unextracted_body)?;
+
+    // all kws (including rest)
+
+    let all_kws = collect_kws_from_expr(pairs)?;
+
+    let dot_kw = all_kws
+        .iter()
+        .enumerate()
+        .find(|(_, kw)| *kw == ".")
+        .map(|(index, _)| index);
+
+    if let Some(dot_index) = dot_kw {
+        // only valid if it's the second to last argument
+        if dot_index + 2 != all_kws.len() {
+            return Err(format!(
+                "rest-dot can only occur as second-to-last argument, but found: {:?}",
+                all_kws
+            ));
+        }
+    };
+
+    let rest_arg = dot_kw.and_then(|index| all_kws.get(index + 1));
+    let (kws, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
+
+    let mut new_body_chunk = Chunk { code: vec![] };
+
+    for expr in body.clone() {
+        new_body_chunk.code.push(VMInstruction::Constant(expr));
+    }
+    for expr in body {
+        new_body_chunk.code.push(VMInstruction::Constant(expr));
+    }
+
+    chunk
+        .code
+        .push(VMInstruction::Constant(Expr::LambdaDefinition(
+            new_body_chunk,
+            rest_arg.cloned(),
+            kws.to_vec(),
+        )));
+    chunk.code.push(VMInstruction::MakeLambda);
+    chunk.code.push(VMInstruction::Define(macro_name.clone()));
+    Ok(())
+}
+
 fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let kw = match expr {
         Expr::Pair(
@@ -331,6 +386,9 @@ pub fn compile_internal(
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
             make_lambda(r, chunk)?;
+        }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "defmacro" => {
+            make_macro(r, chunk)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             make_define(r, chunk)?;
