@@ -18,13 +18,13 @@ pub fn app() -> Html {
     let source_handle = use_state(|| "(+ 1 5)".to_string());
     let source = (*source_handle).clone();
 
-    let vm_handle = use_state(|| vm::prepare_vm(&source_handle));
+    let vm_handle = use_state(|| vm::prepare_vm(source.clone()));
     let vm = (*vm_handle).clone();
 
     use_effect_with_deps(
         {
             let vm_handle = vm_handle.clone();
-            move |arg| vm_handle.set(vm::prepare_vm(arg))
+            move |arg: &String| vm_handle.set(vm::prepare_vm(arg.clone()))
         },
         source.clone(),
     );
@@ -57,7 +57,7 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let res = prepare_vm(&source).and_then(|mut vm| {
+            let res = prepare_vm(source.clone()).and_then(|mut vm| {
                 run(&mut vm, &get_globals())?;
                 Ok(vm)
             });
