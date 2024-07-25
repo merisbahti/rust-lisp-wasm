@@ -3,6 +3,7 @@ use crate::vm;
 use crate::vm::jit_run;
 use crate::vm::prepare_vm;
 use crate::vm::run;
+use crate::vm::VM;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::UnwrapThrowExt;
@@ -47,21 +48,14 @@ pub fn app() -> Html {
         let new_vm = vm.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            match &new_vm.clone() {
+            let result: Result<VM, String> = match &new_vm.clone() {
                 Ok(stuff) => {
                     let mut cloned = stuff.clone();
-                    vm::step(&mut cloned, &get_globals());
-                    vm_handle.set(Ok(cloned));
+                    vm::step(&mut cloned, &get_globals()).map(|_| cloned)
                 }
-                Err(_) => todo!(),
-            }
-            // Ok(mut stuff) => {
-            //
-            // vm::step(&mut stuff, &get_globals());
-            //     vm_handle.set(Ok(stuff));
-            // }
-
-            // err => vm_handle.set(Err("some damn error".to_string())),
+                Err(msg) => Err(msg.clone()),
+            };
+            vm_handle.set(result);
         }
     });
 
@@ -69,15 +63,15 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let mut vm = match prepare_vm(&source) {
-                Ok(res) => res,
-                Err(message) => {
-                    &vm_handle.set(Err(message.to_string()));
-                    return;
-                }
+            let vm = match prepare_vm(&source) {
+                Ok(res) => Ok(res),
+                Err(message) => Err(message.to_string()),
             };
-            match run(&mut vm, &get_globals()) {
-                Ok(_) => vm_handle.set(Ok(vm.clone())),
+            match vm.and_then(|mut vm| {
+                run(&mut vm, &get_globals())?;
+                Ok(vm)
+            }) {
+                Ok(vm) => vm_handle.set(Ok(vm.clone())),
                 Err(message) => vm_handle.set(Err(message.to_string())),
             }
         }
