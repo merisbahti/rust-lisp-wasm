@@ -1,4 +1,5 @@
 use crate::compile::get_globals;
+use crate::expr::Expr;
 use crate::vm;
 use crate::vm::prepare_vm;
 use crate::vm::run;
@@ -8,9 +9,20 @@ use wasm_bindgen::UnwrapThrowExt;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
+#[derive(Properties, PartialEq)]
+pub struct StackProps {
+    stack: Vec<Expr>,
+}
+
 #[function_component(Stack)]
-pub fn stack() -> Html {
-    html! { { "stack" } }
+pub fn stack(props: &StackProps) -> Html {
+    html! {
+        <div class="stack">
+            { props.stack.clone().into_iter().map(|stack_item|
+                html! {<div>{format!("{:?}", stack_item)}</div>}
+            ).collect::<Html>() }
+        </div>
+    }
 }
 
 #[function_component(App)]
@@ -76,8 +88,12 @@ pub fn app() -> Html {
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <Stack />
-                    <div>{ format!("{:?}", vm) }</div>
+                    if let Ok(vm) = vm.clone() {
+                        <Stack stack={vm.stack} />
+                    }
+                    if let Err(error) = vm.clone() {
+                        <div class="error">{ format!("Error: {:}", error) }</div>
+                    }
                 </div>
             </div>
         </main>
