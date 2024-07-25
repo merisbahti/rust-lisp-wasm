@@ -1,0 +1,62 @@
+body {
+  background-color: #151515;
+  color: #afafaf;
+  font-size: larger;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.error {
+  font-size: larger;
+  color: orangered;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 500px;
+}
+
+.callframes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.callframes> :not(:first-child) {
+  opacity: 0.5;
+}
+
+.callframe {
+  flex-wrap: wrap;
+  max-width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: start;
+}
+
+.instruction.active {
+  border-color: white;
+
+}
+
+.instruction {
+  border: 1px solid green;
+  background-color: darkolivegreen;
+  color: yellow;
+  text-align: center;
+  padding: 4px 8px;
+  font-family: monospace;
+  border-radius: 4px;
+}
+
+.stack-item {
+  border: 1px solid greenyellow;
+  background-color: darkolivegreen;
+  color: yellow;
+  text-align: center;
+  padding: 4px 8px;
+  font-family: monospace;
+  border-radius: 4px;
+}

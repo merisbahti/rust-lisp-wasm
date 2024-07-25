@@ -1,19 +1,18 @@
 [package]
 name = "rispy"
 version = "0.1.0"
-authors = ["Nshen <nshen121@gmail.com>"]
+authors = ["meris bahti"]
 edition = "2021"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [dependencies]
 cfg-if = "1.0.0"
+web-sys = "0.3.69"
 wasm-bindgen = "0.2.79"
 nom = "7.1.0"
+yew = { version="0.20", features=["csr"] }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -29,6 +28,9 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 wee_alloc = { version = "0.4.5", optional = true }
 serde =  { version = "1.0.203", features=["derive"] }
 serde-wasm-bindgen = "0.6.5"
+gloo = "0.11.0"
+gloo-console = "0.3.0"
+gloo-events = "0.2.0"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.13"

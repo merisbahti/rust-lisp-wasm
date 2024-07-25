@@ -293,7 +293,7 @@ fn make_and(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     ));
     chunk.code.extend_from_slice(&r_chunk.code);
     chunk.code.push(VMInstruction::Return);
-    compile(&l, chunk)?;
+    compile(l, chunk)?;
     Ok(())
 }
 
@@ -316,7 +316,7 @@ fn make_or(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     ));
     chunk.code.extend_from_slice(&r_chunk.code);
     chunk.code.push(VMInstruction::Return);
-    compile(&r, chunk)?;
+    compile(r, chunk)?;
     Ok(())
 }
 
