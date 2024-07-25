@@ -85,14 +85,14 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 BuiltIn::OneArg(func) => {
                     let top = match vm.stack.pop() {
                         Some(top) => top,
-                        None => return Err(format!("Expected item on stack, but found none")),
+                        None => return Err("Expected item on stack, but found none".to_string()),
                     };
                     vm.stack.push(func(&top)?);
                 }
                 BuiltIn::TwoArg(func) => {
                     let (first, second) = match (vm.stack.pop(), vm.stack.pop()) {
                         (Some(first), Some(second)) => (first, second),
-                        _ => return Err(format!("Expected item on stack, but found none")),
+                        _ => return Err("Expected item on stack, but found none".to_string()),
                     };
                     vm.stack.push(func(&first, &second)?);
                 }
@@ -330,7 +330,7 @@ fn get_initial_vm_and_chunk() -> VM {
 
 pub fn prepare_vm(input: &String) -> Result<VM, String> {
     // parse, compile and run, then check what's left on the stack
-    let exprs = match parse::parse(&input) {
+    let exprs = match parse::parse(input) {
         Ok(res) => res,
         Err(err) => return Err(err),
     };

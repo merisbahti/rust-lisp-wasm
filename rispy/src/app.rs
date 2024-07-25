@@ -1,9 +1,7 @@
 use crate::compile::get_globals;
 use crate::vm;
-use crate::vm::jit_run;
 use crate::vm::prepare_vm;
 use crate::vm::run;
-use crate::vm::VM;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::UnwrapThrowExt;
@@ -20,13 +18,13 @@ pub fn app() -> Html {
     let source_handle = use_state(|| "(+ 1 5)".to_string());
     let source = (*source_handle).clone();
 
-    let vm_handle = use_state(|| vm::prepare_vm(&source_handle.to_string()));
+    let vm_handle = use_state(|| vm::prepare_vm(&source_handle));
     let vm = (*vm_handle).clone();
 
     use_effect_with_deps(
         {
             let vm_handle = vm_handle.clone();
-            move |arg| vm_handle.set(vm::prepare_vm(&arg))
+            move |arg| vm_handle.set(vm::prepare_vm(arg))
         },
         source.clone(),
     );
@@ -45,17 +43,13 @@ pub fn app() -> Html {
     });
 
     let step = Callback::from({
-        let new_vm = vm.clone();
+        let vm_result = vm.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let result: Result<VM, String> = match &new_vm.clone() {
-                Ok(stuff) => {
-                    let mut cloned = stuff.clone();
-                    vm::step(&mut cloned, &get_globals()).map(|_| cloned)
-                }
-                Err(msg) => Err(msg.clone()),
-            };
-            vm_handle.set(result);
+            let result = vm_result
+                .clone()
+                .and_then(|mut vm| vm::step(&mut vm, &get_globals()).map(|_| vm));
+            vm_handle.set(result.clone());
         }
     });
 
@@ -63,17 +57,11 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let vm = match prepare_vm(&source) {
-                Ok(res) => Ok(res),
-                Err(message) => Err(message.to_string()),
-            };
-            match vm.and_then(|mut vm| {
+            let res = prepare_vm(&source).and_then(|mut vm| {
                 run(&mut vm, &get_globals())?;
                 Ok(vm)
-            }) {
-                Ok(vm) => vm_handle.set(Ok(vm.clone())),
-                Err(message) => vm_handle.set(Err(message.to_string())),
-            }
+            });
+            vm_handle.set(res)
         }
     });
 
