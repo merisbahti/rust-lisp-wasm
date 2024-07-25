@@ -19,7 +19,7 @@ pub fn stack(props: &StackProps) -> Html {
     html! {
         <div class="stack">
             { props.stack.clone().into_iter().map(|stack_item|
-                html! {<div>{format!("{:?}", stack_item)}</div>}
+                html! {<div class="stack-item">{format!("{:?}", stack_item)}</div>}
             ).collect::<Html>() }
         </div>
     }

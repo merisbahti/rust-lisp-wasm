@@ -14,6 +14,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
 
-
+.stack-item {
+  border: 1px solid greenyellow;
+  background-color: darkolivegreen;
+  color: yellow;
+  text-align: center;
+  padding: 4px 8px;
+  font-family: monospace;
+  border-radius: 4px;
 }
