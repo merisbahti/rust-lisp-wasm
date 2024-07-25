@@ -30,8 +30,8 @@ pub struct Env {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Callframe {
-    ip: usize,
-    chunk: Chunk,
+    pub ip: usize,
+    pub chunk: Chunk,
     env: String,
 }
 
