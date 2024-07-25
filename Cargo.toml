@@ -1,7 +1,7 @@
 [package]
 name = "rispy"
 version = "0.1.0"
-authors = ["Nshen <nshen121@gmail.com>"]
+authors = ["meris bahti"]
 edition = "2021"
 
 [package.metadata.wasm-pack.profile.release]
