@@ -22,7 +22,7 @@ pub fn Stack(props: &StackProps) -> Html {
             if props.stack.len() == 0 {
                 { "empty stack" }
             }
-            { props.stack.clone().into_iter().map(|stack_item|
+            { props.stack.clone().into_iter().rev().map(|stack_item|
                 html! {<div class="stack-item">{format!("{:?}", stack_item)}</div>}
             ).collect::<Html>() }
         </div>
@@ -51,7 +51,7 @@ pub fn Callframes(props: &CallFramesProps) -> Html {
 
 #[function_component(App)]
 pub fn app() -> Html {
-    let source_handle = use_state(|| {
+    let fib = vec![
         "(define fib (lambda (n) 
   (fib-iter 1 0 n)))
 (define fib-iter (lambda (a b count)
@@ -59,8 +59,18 @@ pub fn app() -> Html {
   b
   (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
-            .to_string()
+            .to_string(),
+        "(defmacro (m a) (list + a 2))
+        (m 2)"
+            .to_string(),
+    ];
+
+    let source_handle = use_state(|| {
+        fib.get(1)
+            .map(|x| x.clone())
+            .unwrap_or("not found".to_string())
     });
+
     let source = (*source_handle).clone();
 
     let vm_handle = use_state(|| vm::prepare_vm(source.clone()));
