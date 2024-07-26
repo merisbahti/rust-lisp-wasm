@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -152,7 +152,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                     vm.stack.push(instructions.clone());
                     return Ok(());
                 }
-                None => return Err(format!("not found: {name}")),
+                None => return Err(format!("not found: {name}, in env: {:#?}", envs)),
             };
         }
         VMInstruction::Call(arity) => {

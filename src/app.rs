@@ -127,7 +127,19 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let res = prepare_vm(source.clone()).and_then(|mut vm| {
+            let prelude = match get_prelude() {
+                Ok(prelude) => prelude,
+                Err(err) => {
+                    vm_handle.set(Err(err));
+                    return;
+                }
+            };
+            let prepared_vm = vm::prepare_vm(source.clone()).map(|mut vm| {
+                vm.envs.insert("initial_env".to_string(), prelude);
+                vm
+            });
+
+            let res = prepared_vm.and_then(|mut vm| {
                 run(&mut vm, &get_globals())?;
                 Ok(vm)
             });
