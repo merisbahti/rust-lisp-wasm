@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     compile::{compile_many_exprs, get_globals, make_pairs_from_vec, BuiltIn},
     expr::Expr,
-    parse,
+    parse::{self},
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -24,15 +24,15 @@ pub enum VMInstruction {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Env {
-    map: HashMap<String, Expr>,
-    parent: Option<String>,
+    pub map: HashMap<String, Expr>,
+    pub parent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Callframe {
     pub ip: usize,
     pub chunk: Chunk,
-    env: String,
+    pub env: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -226,10 +226,10 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let rv = match (vm.stack.pop(), vm.stack.pop()) {
                 (Some(rv), Some(Expr::Lambda(..))) => rv,
                 (Some(rv), None) => rv,
-                (Some(_), Some(not_fn)) => {
+                (Some(a), Some(b)) => {
                     return Err(format!(
-                        "expected fn on stack after returning, but found: {:?}",
-                        not_fn,
+                        "expected fn on stack after returning, but found: {a} {b} {:?}",
+                        vm.stack
                     ))
                 }
                 _ => return Err("too few args for return on stack".to_string()),
@@ -314,7 +314,7 @@ fn test_add() {
     debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
 }
 
-fn get_initial_vm_and_chunk() -> VM {
+pub fn get_initial_vm_and_chunk() -> VM {
     VM {
         callframes: vec![],
         stack: vec![],
@@ -339,7 +339,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
     let mut chunk = Chunk { code: vec![] };
 
-    compile_many_exprs(exprs, &mut chunk)?;
+    compile_many_exprs(exprs, &mut chunk, &get_globals(), &mut HashMap::new())?;
 
     let callframe = Callframe {
         ip: 0,
@@ -630,5 +630,104 @@ fn compiled_test() {
             Expr::Num(4.0),
             Expr::Num(5.0)
         ]))
+    );
+
+    assert_eq!(
+        jit_run("(defmacro (m) 10) (m)".to_string()),
+        Ok(Expr::Num(10.0),)
+    );
+    assert_eq!(
+        jit_run("(defmacro (m a) (cons '+ (cons 1 (cons 2 '())))) (m 2)".to_string()),
+        Ok(Expr::Num(3.0),)
+    );
+    assert_eq!(
+        jit_run("(defmacro (m a) (cons '+ (cons a (cons 2 '())))) (m 1)".to_string()),
+        Ok(Expr::Num(3.0),)
+    );
+    assert_eq!(
+        jit_run(
+            "
+                (define (accumulate op initial sequence)
+                  (if (nil? sequence)
+                    initial
+                    (op (car sequence)
+                     (accumulate op initial (cdr sequence)))))
+                     (accumulate (lambda (curr acc) (+ curr acc))
+                     0
+                     '(1 2 3 5)
+                     
+                     )
+                
+           "
+            .to_string(),
+        ),
+        Ok(Expr::Num(11.0))
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+            (define  
+                (add . xs) 
+                (define (accumulate op initial sequence)
+                  (if (nil? sequence)
+                    initial
+                    (op (car sequence)
+                     (accumulate op initial (cdr sequence)))))
+                (accumulate 
+                  (lambda (curr acc) (cons '+ (cons curr (cons acc '()))))
+                  0
+                  xs)
+            ) 
+            (add 1 2)
+            "
+            .to_string()
+        ),
+        parse::parse("(+ 1 (+ 2 0))").and_then(|x| match x.first() {
+            Some(x) => Ok(x.clone()),
+            None => panic!(),
+        })
+    );
+    assert_eq!(
+        jit_run(
+            "
+            (defmacro  
+                (add . xs) 
+                (define (accumulate op initial sequence)
+                  (if (nil? sequence)
+                    initial
+                    (op (car sequence)
+                     (accumulate op initial (cdr sequence)))))
+                (accumulate 
+                  (lambda (curr acc) (cons '+ (cons curr (cons acc '()))))
+                  0
+                  xs)
+            ) 
+            (add 1 2)
+            "
+            .to_string()
+        ),
+        Ok(Expr::Num(3.0),)
+    );
+    assert_eq!(
+        jit_run(
+            "
+            (defmacro  
+                (add . xs) 
+                (define (accumulate op initial sequence)
+                  (if (nil? sequence)
+                    initial
+                    (op (car sequence)
+                     (accumulate op initial (cdr sequence)))))
+                (accumulate 
+                  (lambda (curr acc) (cons '+ (cons curr (cons acc '()))))
+                  0
+                  xs)
+            ) 
+            (add 1 2 3 4 5)
+            "
+            .to_string()
+        ),
+        Ok(Expr::Num(15.0),)
     );
 }
