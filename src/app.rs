@@ -61,7 +61,7 @@ pub fn app() -> Html {
   (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
             .to_string(),
-        "(defmacro (m a) (list + a 2))
+        "(defmacro (m a) (cons '+ (cons a (cons 2 '()))))
         (m 2)"
             .to_string(),
     ];
