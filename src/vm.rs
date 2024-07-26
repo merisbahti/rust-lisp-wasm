@@ -633,7 +633,7 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(defmacro (m a) (list + a 2)) (macro-m 2)".to_string()),
+        jit_run("(defmacro (m a) (list + a 2)) (m 2)".to_string()),
         Ok(parse::make_pair_from_vec(vec![
             Expr::Num(1.0),
             Expr::Num(2.0),

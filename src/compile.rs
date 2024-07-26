@@ -180,7 +180,7 @@ fn make_lambda(
     chunk: &mut Chunk,
 
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
@@ -233,7 +233,7 @@ fn make_define(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     let kw = match expr {
         Expr::Pair(
@@ -269,7 +269,7 @@ fn make_if(
     chunk: &mut Chunk,
 
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
@@ -301,7 +301,7 @@ fn make_and(
     chunk: &mut Chunk,
 
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
@@ -330,7 +330,7 @@ fn make_or(
     chunk: &mut Chunk,
 
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
@@ -354,15 +354,18 @@ fn make_or(
     Ok(())
 }
 
-pub fn make_macro(_expr: &Expr) -> Arc<dyn Fn(&Vec<&Expr>) -> Expr> {
-    todo!("make macro NYI: construct `Vec<Expr> -> Expr` fn")
+type MacroFn = Arc<dyn Fn(&Vec<&Expr>) -> Result<Expr, String>>;
+
+pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
+    // this guy will receive a expressions
+    Arc::new(|exprs| Err("Macro not defined yet".to_string()))
 }
 
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
@@ -371,9 +374,13 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
             make_lambda(r, chunk, globals, macros)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "defmacro" => {
-            let new_macro = make_macro(r);
-            macros.insert(kw.clone(), new_macro);
+        Expr::Pair(
+            box Expr::Keyword(kw),
+            box Expr::Pair(box Expr::Pair(box Expr::Keyword(macro_name), box args), box macro_body),
+        ) if kw == "defmacro" => {
+            let args = collect_kws_from_expr(args).map_err(|_| "Ooops")?;
+            let new_macro = make_macro(&args, macro_body);
+            macros.insert(macro_name.clone(), new_macro);
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(_) = macros.get(kw) => {
             todo!("macro {:?} found, but expansion is not yet defined", kw)
@@ -439,7 +446,7 @@ pub fn compile_many_exprs(
     exprs: Vec<Expr>,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-    macros: &mut HashMap<String, Arc<dyn Fn(&Vec<&Expr>) -> Expr>>,
+    macros: &mut HashMap<String, MacroFn>,
 ) -> Result<(), String> {
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
         match compile_internal(expr, chunk, globals, macros) {
