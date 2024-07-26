@@ -349,7 +349,7 @@ fn make_or(
     Ok(())
 }
 
-type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
+pub type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
 pub fn make_macro(
     params: &Vec<String>,
