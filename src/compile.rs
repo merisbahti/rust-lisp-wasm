@@ -423,11 +423,7 @@ pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            for macro_expr in macro_exprs {
-                compile(&macro_expr, &mut chunk).map_err(|err| {
-                    format!("Error during compilation of macro  expansion: {}", err)
-                })?;
-            }
+            compile_many_exprs(macro_exprs, &mut chunk, &get_globals(), &mut HashMap::new())?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {
@@ -509,7 +505,7 @@ pub fn compile_internal(
                     "Expected {} arguments for {}, but found {}",
                     arity,
                     kw,
-                    exprs.len()
+                    exprs.len(),
                 ));
             }
             for expr in exprs {
