@@ -138,7 +138,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
 
 pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let globals = get_globals();
-    compile_internal(expr, chunk, &globals)
+    compile_internal(expr, chunk, &globals, &HashMap::new())
 }
 
 pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
@@ -175,7 +175,13 @@ fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
         _ => Ok(vec![]),
     }
 }
-fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+fn make_lambda(
+    expr: &Expr,
+    chunk: &mut Chunk,
+
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
@@ -210,7 +216,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     let mut new_body_chunk = Chunk { code: vec![] };
 
     // find closing over variables
-    compile_many_exprs(body.clone(), &mut new_body_chunk)?;
+    compile_many_exprs(body.clone(), &mut new_body_chunk, globals, macros)?;
 
     chunk
         .code
@@ -223,62 +229,12 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     Ok(())
 }
 
-fn make_macro(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
-    let (macro_name, pairs, unextracted_body) = match expr {
-        Expr::Pair(
-            box Expr::Pair(box Expr::Keyword(macro_name), box pairs),
-            body @ box Expr::Pair(..),
-        ) => (macro_name, pairs, body),
-        otherwise => return Err(format!("Invalid macro definition: {:?}", otherwise)),
-    };
-
-    let body = collect_exprs_from_body(unextracted_body)?;
-
-    // all kws (including rest)
-
-    let all_kws = collect_kws_from_expr(pairs)?;
-
-    let dot_kw = all_kws
-        .iter()
-        .enumerate()
-        .find(|(_, kw)| *kw == ".")
-        .map(|(index, _)| index);
-
-    if let Some(dot_index) = dot_kw {
-        // only valid if it's the second to last argument
-        if dot_index + 2 != all_kws.len() {
-            return Err(format!(
-                "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                all_kws
-            ));
-        }
-    };
-
-    let rest_arg = dot_kw.and_then(|index| all_kws.get(index + 1));
-    let (kws, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
-
-    let mut new_body_chunk = Chunk { code: vec![] };
-
-    for expr in body.clone() {
-        new_body_chunk.code.push(VMInstruction::Constant(expr));
-    }
-    for expr in body {
-        new_body_chunk.code.push(VMInstruction::Constant(expr));
-    }
-
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::LambdaDefinition(
-            new_body_chunk,
-            rest_arg.cloned(),
-            kws.to_vec(),
-        )));
-    chunk.code.push(VMInstruction::MakeLambda);
-    chunk.code.push(VMInstruction::Define(macro_name.clone()));
-    Ok(())
-}
-
-fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+fn make_define(
+    expr: &Expr,
+    chunk: &mut Chunk,
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     let kw = match expr {
         Expr::Pair(
             box Expr::Pair(box Expr::Keyword(fn_name), fn_args),
@@ -286,11 +242,16 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         ) => {
             // this is a lambda definition
             // kws should contain a fn name and then its args
-            make_lambda(&Expr::Pair(fn_args.clone(), body.clone()), chunk)?;
+            make_lambda(
+                &Expr::Pair(fn_args.clone(), body.clone()),
+                chunk,
+                globals,
+                macros,
+            )?;
             Ok(fn_name.clone())
         }
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
-            compile(definee, chunk)?;
+            compile_internal(definee, chunk, globals, macros)?;
             Ok(kw.clone())
         }
         otherwise => Err(format!(
@@ -303,7 +264,13 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
     Ok(())
 }
 
-fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+fn make_if(
+    expr: &Expr,
+    chunk: &mut Chunk,
+
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
             box pred,
@@ -317,19 +284,25 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         }
     };
     let mut cons_chunk = Chunk { code: vec![] };
-    compile(consequent, &mut cons_chunk)?;
-    compile(pred, chunk)?;
+    compile_internal(consequent, &mut cons_chunk, globals, macros)?;
+    compile_internal(pred, chunk, globals, macros)?;
     chunk.code.push(VMInstruction::If(
         cons_chunk.code.len() + 1,
         // one extra return for consequent
     ));
     chunk.code.extend_from_slice(&cons_chunk.code);
     chunk.code.push(VMInstruction::Return);
-    compile(alternate, chunk)?;
+    compile_internal(alternate, chunk, globals, macros)?;
     Ok(())
 }
 
-fn make_and(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+fn make_and(
+    expr: &Expr,
+    chunk: &mut Chunk,
+
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
         otherwise => {
@@ -340,19 +313,25 @@ fn make_and(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         }
     };
     let mut r_chunk = Chunk { code: vec![] };
-    compile(r, &mut r_chunk)?;
-    compile(l, chunk)?;
+    compile_internal(r, &mut r_chunk, globals, macros)?;
+    compile_internal(l, chunk, globals, macros)?;
     chunk.code.push(VMInstruction::If(
         r_chunk.code.len() + 1,
         // one extra return for consequent
     ));
     chunk.code.extend_from_slice(&r_chunk.code);
     chunk.code.push(VMInstruction::Return);
-    compile(l, chunk)?;
+    compile_internal(l, chunk, globals, macros)?;
     Ok(())
 }
 
-fn make_or(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
+fn make_or(
+    expr: &Expr,
+    chunk: &mut Chunk,
+
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
         otherwise => {
@@ -363,15 +342,15 @@ fn make_or(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
         }
     };
     let mut r_chunk = Chunk { code: vec![] };
-    compile(l, &mut r_chunk)?;
-    compile(l, chunk)?;
+    compile_internal(l, &mut r_chunk, globals, macros)?;
+    compile_internal(l, chunk, globals, macros)?;
     chunk.code.push(VMInstruction::If(
         r_chunk.code.len() + 1,
         // one extra return for consequent
     ));
     chunk.code.extend_from_slice(&r_chunk.code);
     chunk.code.push(VMInstruction::Return);
-    compile(r, chunk)?;
+    compile_internal(r, chunk, globals, macros)?;
     Ok(())
 }
 
@@ -379,28 +358,32 @@ pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
 ) -> Result<(), String> {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {:?}", expr)
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
-            make_lambda(r, chunk)?;
+            make_lambda(r, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "defmacro" => {
-            make_macro(r, chunk)?;
+            todo!("make macro NYI: construct `Vec<Expr> -> Expr` fn and add it to macros")
+        }
+        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(_) = macros.get(kw) => {
+            todo!("macro {:?} found, but expansion is not yet defined", kw)
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
-            make_define(r, chunk)?;
+            make_define(r, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
-            make_if(r, chunk)?;
+            make_if(r, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "and" => {
-            make_and(r, chunk)?;
+            make_and(r, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
-            make_or(r, chunk)?;
+            make_or(r, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
@@ -414,15 +397,15 @@ pub fn compile_internal(
                 ));
             }
             for expr in exprs {
-                compile_internal(&expr, chunk, globals)?;
+                compile_internal(&expr, chunk, globals, macros)?;
             }
             chunk.code.push(VMInstruction::BuiltIn(kw.clone()));
         }
         Expr::Pair(box l, box r) => {
             let exprs = collect_exprs_from_body(r)?;
-            compile_internal(l, chunk, globals)?;
+            compile_internal(l, chunk, globals, macros)?;
             for expr in exprs.iter() {
-                compile_internal(expr, chunk, globals)?;
+                compile_internal(expr, chunk, globals, macros)?;
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
@@ -447,9 +430,14 @@ pub fn compile_internal(
     Ok(())
 }
 
-pub fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) -> Result<(), String> {
+pub fn compile_many_exprs(
+    exprs: Vec<Expr>,
+    chunk: &mut Chunk,
+    globals: &HashMap<String, BuiltIn>,
+    macros: &HashMap<String, Box<dyn Fn(&Expr) -> Expr>>,
+) -> Result<(), String> {
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
-        match compile(expr, chunk) {
+        match compile_internal(expr, chunk, globals, macros) {
             Ok(_) => {}
             Err(e) => return Err(e),
         };
