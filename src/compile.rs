@@ -354,7 +354,7 @@ fn make_or(
     Ok(())
 }
 
-type MacroFn = Arc<dyn Fn(&Vec<&Expr>) -> Result<Expr, String>>;
+type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
 pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
     // this guy will receive a expressions
@@ -378,12 +378,20 @@ pub fn compile_internal(
             box Expr::Keyword(kw),
             box Expr::Pair(box Expr::Pair(box Expr::Keyword(macro_name), box args), box macro_body),
         ) if kw == "defmacro" => {
-            let args = collect_kws_from_expr(args).map_err(|_| "Ooops")?;
+            let args = collect_kws_from_expr(args)
+                .map_err(|_| "Error when collecting kws for macro definition")?;
             let new_macro = make_macro(&args, macro_body);
             macros.insert(macro_name.clone(), new_macro);
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(_) = macros.get(kw) => {
-            todo!("macro {:?} found, but expansion is not yet defined", kw)
+        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = macros.get(kw) => {
+            let args = collect_exprs_from_body(r).map_err(|_| {
+                format!(
+                    "Error when collecting kws for macro expansion, found: {}",
+                    r
+                )
+            })?;
+            let expanded_macro = found_macro(&args)?;
+            compile_internal(&expanded_macro, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             make_define(r, chunk, globals, macros)?;
