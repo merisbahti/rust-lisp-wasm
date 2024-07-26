@@ -136,11 +136,6 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
     ])
 }
 
-pub fn compile(expr: &Expr, chunk: &mut Chunk) -> Result<(), String> {
-    let globals = get_globals();
-    compile_internal(expr, chunk, &globals, &mut HashMap::new())
-}
-
 pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
     match exprs.split_first() {
         Some((head, tail)) => Expr::Pair(
@@ -566,13 +561,15 @@ pub fn compile_many_exprs(
 fn test_simple_add_compilation() {
     let mut initial_chunk = Chunk { code: vec![] };
 
-    match compile(
+    match compile_internal(
         &crate::parse::make_pair_from_vec(vec![
             Expr::Keyword("+".to_string()),
             Expr::Num(1.0),
             Expr::Num(2.0),
         ]),
         &mut initial_chunk,
+        &get_globals(),
+        &mut HashMap::new(),
     ) {
         Ok(_) => {}
         Err(e) => panic!("Error {:?}", e),
@@ -594,7 +591,7 @@ fn losta_compile() {
     fn parse_and_compile(input: &str) -> Vec<VMInstruction> {
         let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile(&expr, &mut chunk) {
+        match compile_internal(&expr, &mut chunk, &get_globals(), &mut HashMap::new()) {
             Ok(..) => chunk.code,
             Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
         }
@@ -684,7 +681,7 @@ fn lambda_compile_test() {
     fn parse_and_compile(input: &str) -> Chunk {
         let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile(&expr, &mut chunk) {
+        match compile_internal(&expr, &mut chunk, &get_globals(), &mut HashMap::new()) {
             Ok(()) => chunk,
             Err(e) => panic!("Error: {:?}", e),
         }
