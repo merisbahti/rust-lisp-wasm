@@ -32,7 +32,7 @@ pub struct Env {
 pub struct Callframe {
     pub ip: usize,
     pub chunk: Chunk,
-    env: String,
+    pub env: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -314,7 +314,7 @@ fn test_add() {
     debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
 }
 
-fn get_initial_vm_and_chunk() -> VM {
+pub fn get_initial_vm_and_chunk() -> VM {
     VM {
         callframes: vec![],
         stack: vec![],
@@ -633,7 +633,15 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(defmacro (m a) (list + a 2)) (m 2)".to_string()),
+        jit_run("(defmacro (m) 10) (m)".to_string()),
+        Ok(Expr::Num(10.0),)
+    );
+    assert_eq!(
+        jit_run("(defmacro (m a) (cons '+ (cons 1 (cons 2 '())))) (m 2)".to_string()),
+        Ok(Expr::Num(3.0),)
+    );
+    assert_eq!(
+        jit_run("(defmacro (m a) (cons '+ (cons 'a (cons 2 '())))) (m 2)".to_string()),
         Ok(Expr::Num(3.0),)
     );
 }

@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use crate::{
     expr::Expr,
     parse::make_pair_from_vec,
-    vm::{Chunk, VMInstruction},
+    vm::{get_initial_vm_and_chunk, run, Callframe, Chunk, VMInstruction},
 };
 
 pub enum BuiltIn {
@@ -358,7 +358,48 @@ type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
 pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
     // this guy will receive a expressions
-    Arc::new(|exprs| Err("Macro not defined yet".to_string()))
+    Arc::new({
+        let macro_definition = macro_definition.clone();
+        let params = params.clone();
+
+        move |args| {
+            let mut vm = get_initial_vm_and_chunk();
+
+            let mut chunk = Chunk { code: vec![] };
+
+            println!("macro definition: {:?}", &macro_definition.clone());
+            let macro_exprs = collect_exprs_from_body(&macro_definition)?;
+            for macro_expr in macro_exprs {
+                compile(&macro_expr, &mut chunk).map_err(|err| {
+                    format!("Error during compilation of macro  expansion: {}", err)
+                })?;
+            }
+            chunk.code.push(VMInstruction::Return);
+
+            println!("compiled chunk: {:?}", &chunk.clone());
+            let callframe = Callframe {
+                ip: 0,
+                chunk,
+                env: "initial_env".to_string(),
+            };
+            vm.callframes.push(callframe);
+
+            match run(&mut vm, &get_globals()) {
+                Ok(e) => e,
+                Err(err) => {
+                    return Result::Err(format!("Error when running macro expansion: {err}"))
+                }
+            };
+
+            match vm.stack.first() {
+                Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
+                _ => Result::Err(format!(
+                    "expected one value on the stack, got {:#?}",
+                    vm.stack
+                )),
+            }
+        }
+    })
 }
 
 pub fn compile_internal(
