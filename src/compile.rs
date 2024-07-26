@@ -357,7 +357,6 @@ fn make_or(
 type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
 pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
-    // this guy will receive a expressions
     Arc::new({
         let macro_definition = macro_definition.clone();
         let all_kws = params.clone();
@@ -408,7 +407,7 @@ pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
                 .zip(args.clone())
                 .collect::<HashMap<String, Expr>>();
 
-            variadic.inspect(|arg_name| {
+            variadic.clone().inspect(|arg_name| {
                 let (_, pairs) = args.split_at(vars.len());
                 map.insert(
                     arg_name.clone().clone(),
