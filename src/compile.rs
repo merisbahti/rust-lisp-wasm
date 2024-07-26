@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use crate::{
     expr::Expr,
     parse::make_pair_from_vec,
-    vm::{get_initial_vm_and_chunk, run, Callframe, Chunk, VMInstruction},
+    vm::{get_initial_vm_and_chunk, run, Callframe, Chunk, Env, VMInstruction},
 };
 
 pub enum BuiltIn {
@@ -360,14 +360,68 @@ pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
     // this guy will receive a expressions
     Arc::new({
         let macro_definition = macro_definition.clone();
-        let params = params.clone();
+        let all_kws = params.clone();
 
         move |args| {
+            let dot_kw = all_kws
+                .iter()
+                .enumerate()
+                .find(|(_, kw)| *kw == ".")
+                .map(|(index, _)| index);
+
+            if let Some(dot_index) = dot_kw {
+                // only valid if it's the second to last argument
+                if dot_index + 2 != all_kws.len() {
+                    return Err(format!(
+                        "rest-dot can only occur as second-to-last argument, but found: {:?}",
+                        all_kws
+                    ));
+                }
+            };
+
+            let variadic = dot_kw.and_then(|index| all_kws.get(index + 1));
+            let (vars, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
+
+            let is_variadic = variadic.is_some();
+
+            if is_variadic && args.len() < vars.len() {
+                return Err(format!(
+                    "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                    vars.len(),
+                    vars,
+                    args.len()
+                ));
+            }
+
+            if !is_variadic && args.len() != vars.len() {
+                return Err(format!(
+                    "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                    vars.len(),
+                    vars,
+                    args.len()
+                ));
+            }
+
+            let mut map = vars
+                .iter()
+                .cloned()
+                .zip(args.clone())
+                .collect::<HashMap<String, Expr>>();
+
+            variadic.inspect(|arg_name| {
+                let (_, pairs) = args.split_at(vars.len());
+                map.insert(
+                    arg_name.clone().clone(),
+                    make_pairs_from_vec(pairs.to_vec()),
+                );
+            });
+
+            let initial_env = Env { map, parent: None };
+
             let mut vm = get_initial_vm_and_chunk();
 
             let mut chunk = Chunk { code: vec![] };
 
-            println!("macro definition: {:?}", &macro_definition.clone());
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
             for macro_expr in macro_exprs {
                 compile(&macro_expr, &mut chunk).map_err(|err| {
@@ -376,13 +430,14 @@ pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
             }
             chunk.code.push(VMInstruction::Return);
 
-            println!("compiled chunk: {:?}", &chunk.clone());
             let callframe = Callframe {
                 ip: 0,
                 chunk,
                 env: "initial_env".to_string(),
             };
+            // add params and args in vm envs (unevaluated)
             vm.callframes.push(callframe);
+            vm.envs.insert("initial_env".to_string(), initial_env);
 
             match run(&mut vm, &get_globals()) {
                 Ok(e) => e,

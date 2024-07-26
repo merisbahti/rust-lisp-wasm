@@ -24,8 +24,8 @@ pub enum VMInstruction {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Env {
-    map: HashMap<String, Expr>,
-    parent: Option<String>,
+    pub map: HashMap<String, Expr>,
+    pub parent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -641,7 +641,7 @@ fn compiled_test() {
         Ok(Expr::Num(3.0),)
     );
     assert_eq!(
-        jit_run("(defmacro (m a) (cons '+ (cons 'a (cons 2 '())))) (m 2)".to_string()),
+        jit_run("(defmacro (m a) (cons '+ (cons a (cons 2 '())))) (m 1)".to_string()),
         Ok(Expr::Num(3.0),)
     );
 }
