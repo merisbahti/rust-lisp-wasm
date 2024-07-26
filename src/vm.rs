@@ -152,7 +152,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                     vm.stack.push(instructions.clone());
                     return Ok(());
                 }
-                None => return Err(format!("not found: {name}, in env: {:#?}", envs)),
+                None => return Err(format!("not found: {name}",)),
             };
         }
         VMInstruction::Call(arity) => {

@@ -2,7 +2,6 @@ use crate::compile::get_globals;
 use crate::expr::Expr;
 use crate::vm;
 use crate::vm::get_prelude;
-use crate::vm::prepare_vm;
 use crate::vm::run;
 use crate::vm::Callframe;
 

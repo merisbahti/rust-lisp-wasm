@@ -351,12 +351,18 @@ fn make_or(
 
 type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
-pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
+pub fn make_macro(
+    params: &Vec<String>,
+    macro_definition: &Expr,
+    macros: &mut HashMap<String, MacroFn>,
+) -> MacroFn {
     Arc::new({
         let macro_definition = macro_definition.clone();
         let all_kws = params.clone();
+        let macros = macros.clone();
 
         move |args| {
+            let mut macros = macros.clone();
             let dot_kw = all_kws
                 .iter()
                 .enumerate()
@@ -417,7 +423,7 @@ pub fn make_macro(params: &Vec<String>, macro_definition: &Expr) -> MacroFn {
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk, &get_globals(), &mut HashMap::new())?;
+            compile_many_exprs(macro_exprs, &mut chunk, &get_globals(), &mut macros)?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {
@@ -458,7 +464,8 @@ pub fn compile_internal(
             panic!("Cannot compile a {:?}", expr)
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
-            make_lambda(r, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            make_lambda(r, chunk, globals, &mut macros)?;
         }
         Expr::Pair(
             box Expr::Keyword(kw),
@@ -466,7 +473,7 @@ pub fn compile_internal(
         ) if kw == "defmacro" => {
             let args = collect_kws_from_expr(args)
                 .map_err(|_| "Error when collecting kws for macro definition")?;
-            let new_macro = make_macro(&args, macro_body);
+            let new_macro = make_macro(&args, macro_body, macros);
             macros.insert(macro_name.clone(), new_macro);
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = macros.get(kw) => {
@@ -480,16 +487,20 @@ pub fn compile_internal(
             compile_internal(&expanded_macro, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
-            make_define(r, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            make_define(r, chunk, globals, &mut macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
-            make_if(r, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            make_if(r, chunk, globals, &mut macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "and" => {
-            make_and(r, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            make_and(r, chunk, globals, &mut macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
-            make_or(r, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            make_or(r, chunk, globals, &mut macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
@@ -502,16 +513,18 @@ pub fn compile_internal(
                     exprs.len(),
                 ));
             }
+            let mut macros = macros.clone();
             for expr in exprs {
-                compile_internal(&expr, chunk, globals, macros)?;
+                compile_internal(&expr, chunk, globals, &mut macros)?;
             }
             chunk.code.push(VMInstruction::BuiltIn(kw.clone()));
         }
         Expr::Pair(box l, box r) => {
             let exprs = collect_exprs_from_body(r)?;
-            compile_internal(l, chunk, globals, macros)?;
+            let mut macros = macros.clone();
+            compile_internal(l, chunk, globals, &mut macros)?;
             for expr in exprs.iter() {
-                compile_internal(expr, chunk, globals, macros)?;
+                compile_internal(expr, chunk, globals, &mut macros)?;
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
