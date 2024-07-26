@@ -339,7 +339,7 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
     let mut chunk = Chunk { code: vec![] };
 
-    compile_many_exprs(exprs, &mut chunk, &get_globals(), &HashMap::new())?;
+    compile_many_exprs(exprs, &mut chunk, &get_globals(), &mut HashMap::new())?;
 
     let callframe = Callframe {
         ip: 0,
