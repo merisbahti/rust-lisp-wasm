@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use serde::{Deserialize, Serialize};
 
@@ -370,6 +370,18 @@ pub fn jit_run(input: String) -> Result<Expr, String> {
             "expected one value on the stack, got {:#?}",
             vm.stack
         )),
+    }
+}
+
+pub fn get_prelude() -> Result<Env, String> {
+    let prelude_string = include_str!("../prelude.scm").to_string();
+    let mut vm = prepare_vm(prelude_string)
+        .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
+    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {:?}", err))?;
+
+    match vm.envs.get("initial_env") {
+        Some(env) => Ok(env.clone()),
+        None => Err("Could not find initial env when compiling prelude.".to_string()),
     }
 }
 

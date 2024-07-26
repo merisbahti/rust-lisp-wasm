@@ -1,6 +1,7 @@
 use crate::compile::get_globals;
 use crate::expr::Expr;
 use crate::vm;
+use crate::vm::get_prelude;
 use crate::vm::prepare_vm;
 use crate::vm::run;
 use crate::vm::Callframe;
@@ -79,7 +80,21 @@ pub fn app() -> Html {
     use_effect_with_deps(
         {
             let vm_handle = vm_handle.clone();
-            move |arg: &String| vm_handle.set(vm::prepare_vm(arg.clone()))
+            move |arg: &String| {
+                let prelude = match get_prelude() {
+                    Ok(prelude) => prelude,
+                    Err(err) => {
+                        vm_handle.set(Err(err));
+                        return;
+                    }
+                };
+                let prepared_vm = vm::prepare_vm(arg.clone()).map(|mut vm| {
+                    vm.envs.insert("initial_env".to_string(), prelude);
+                    vm
+                });
+
+                vm_handle.set(prepared_vm)
+            }
         },
         source.clone(),
     );
