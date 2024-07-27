@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use crate::{
     expr::Expr,
     parse::make_pair_from_vec,
-    vm::{get_initial_vm_and_chunk, run, Callframe, Chunk, Env, VMInstruction},
+    vm::{Chunk, VMInstruction},
 };
 
 pub enum BuiltIn {
@@ -147,7 +147,7 @@ pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
     }
 }
 
-fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
+pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     match expr {
         Expr::Pair(box Expr::Keyword(kw), box rest) => collect_kws_from_expr(rest).map(|mut x| {
             x.insert(0, kw.clone());
@@ -158,7 +158,7 @@ fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     }
 }
 
-fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
+pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
         Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
         Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
@@ -351,108 +351,6 @@ fn make_or(
 
 pub type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
 
-pub fn make_macro(
-    params: &Vec<String>,
-    macro_definition: &Expr,
-    macros: &mut HashMap<String, MacroFn>,
-) -> MacroFn {
-    Arc::new({
-        let macro_definition = macro_definition.clone();
-        let all_kws = params.clone();
-        let macros = macros.clone();
-
-        move |args| {
-            let mut macros = macros.clone();
-            let dot_kw = all_kws
-                .iter()
-                .enumerate()
-                .find(|(_, kw)| *kw == ".")
-                .map(|(index, _)| index);
-
-            if let Some(dot_index) = dot_kw {
-                // only valid if it's the second to last argument
-                if dot_index + 2 != all_kws.len() {
-                    return Err(format!(
-                        "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                        all_kws
-                    ));
-                }
-            };
-
-            let variadic = dot_kw.and_then(|index| all_kws.get(index + 1));
-            let (vars, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
-
-            let is_variadic = variadic.is_some();
-
-            if is_variadic && args.len() < vars.len() {
-                return Err(format!(
-                    "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
-                    vars.len(),
-                    vars,
-                    args.len()
-                ));
-            }
-
-            if !is_variadic && args.len() != vars.len() {
-                return Err(format!(
-                    "wrong number of args, expected: {:?} ({:?}), got: {:?}",
-                    vars.len(),
-                    vars,
-                    args.len()
-                ));
-            }
-
-            let mut map = vars
-                .iter()
-                .cloned()
-                .zip(args.clone())
-                .collect::<HashMap<String, Expr>>();
-
-            variadic.clone().inspect(|arg_name| {
-                let (_, pairs) = args.split_at(vars.len());
-                map.insert(
-                    arg_name.clone().clone(),
-                    make_pairs_from_vec(pairs.to_vec()),
-                );
-            });
-
-            let initial_env = Env { map, parent: None };
-
-            let mut vm = get_initial_vm_and_chunk();
-
-            let mut chunk = Chunk { code: vec![] };
-
-            let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk, &get_globals(), &mut macros)?;
-            chunk.code.push(VMInstruction::Return);
-
-            let callframe = Callframe {
-                ip: 0,
-                chunk,
-                env: "initial_env".to_string(),
-            };
-            // add params and args in vm envs (unevaluated)
-            vm.callframes.push(callframe);
-            vm.envs.insert("initial_env".to_string(), initial_env);
-
-            match run(&mut vm, &get_globals()) {
-                Ok(e) => e,
-                Err(err) => {
-                    return Result::Err(format!("Error when running macro expansion: {err}"))
-                }
-            };
-
-            match vm.stack.first() {
-                Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
-                _ => Result::Err(format!(
-                    "expected one value on the stack, got {:#?}",
-                    vm.stack
-                )),
-            }
-        }
-    })
-}
-
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
@@ -466,25 +364,6 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
             let mut macros = macros.clone();
             make_lambda(r, chunk, globals, &mut macros)?;
-        }
-        Expr::Pair(
-            box Expr::Keyword(kw),
-            box Expr::Pair(box Expr::Pair(box Expr::Keyword(macro_name), box args), box macro_body),
-        ) if kw == "defmacro" => {
-            let args = collect_kws_from_expr(args)
-                .map_err(|_| "Error when collecting kws for macro definition")?;
-            let new_macro = make_macro(&args, macro_body, macros);
-            macros.insert(macro_name.clone(), new_macro);
-        }
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = macros.get(kw) => {
-            let args = collect_exprs_from_body(r).map_err(|_| {
-                format!(
-                    "Error when collecting kws for macro expansion, found: {}",
-                    r
-                )
-            })?;
-            let expanded_macro = found_macro(&args)?;
-            compile_internal(&expanded_macro, chunk, globals, macros)?;
         }
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
             let mut macros = macros.clone();

@@ -4,6 +4,7 @@
 mod app;
 mod compile;
 mod expr;
+mod macro_expand;
 mod parse;
 mod tests;
 mod vm;

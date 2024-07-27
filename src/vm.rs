@@ -1,3 +1,4 @@
+use crate::macro_expand::macro_expand;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -339,7 +340,15 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
 
     let mut chunk = Chunk { code: vec![] };
 
-    compile_many_exprs(exprs, &mut chunk, &get_globals(), &mut HashMap::new())?;
+    let mut macros = HashMap::new();
+    let macro_expanded = macro_expand(exprs, &mut macros)?;
+
+    compile_many_exprs(
+        macro_expanded,
+        &mut chunk,
+        &get_globals(),
+        &mut HashMap::new(),
+    )?;
 
     let callframe = Callframe {
         ip: 0,
