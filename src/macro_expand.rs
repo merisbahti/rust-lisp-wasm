@@ -118,9 +118,11 @@ pub fn macro_expand_one(
     expr: &Expr,
     macros: &mut HashMap<String, MacroFn>,
 ) -> Result<Expr, String> {
+    let argmacros = macros.clone();
     match expr {
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = macros.get(kw) => {
-            let args = collect_exprs_from_body(r).map_err(|_| {
+        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = argmacros.get(kw) => {
+            let expanded_body = macro_expand_one(r, macros)?;
+            let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
                 format!(
                     "Error when collecting kws for macro expansion, found: {}",
                     r
