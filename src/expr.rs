@@ -2,12 +2,9 @@ use crate::vm::Chunk;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
-use gloo::history::query::ToQuery;
 use nom::lib::std::fmt::Formatter;
-use serde::de::IntoDeserializer;
 use serde::Deserialize;
 use serde::Serialize;
-use std::ops::MulAssign;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Expr {
@@ -15,6 +12,7 @@ pub enum Expr {
     Num(f64),
     Keyword(String),
     Boolean(bool),
+    String(String),
     Quote(Box<Expr>),
     Lambda(
         Chunk,
@@ -58,6 +56,9 @@ impl Display for Expr {
             Expr::Lambda(xs, vars, variadic, env) => {
                 write!(formatter, "Lambda({xs:?}, {vars:?}, {variadic:?}, {env:?})")
             }
+            Expr::String(s) => {
+                write!(formatter, "string {s:?}")
+            }
             Expr::LambdaDefinition(xs, variadic, vars) => {
                 write!(
                     formatter,
@@ -98,6 +99,7 @@ impl PartialEq for Expr {
         match (self, rhs) {
             (Expr::Pair(ax, ay), Expr::Pair(bx, by)) => ax == bx && ay == by,
             (Expr::Num(l), Expr::Num(r)) if l == r => true,
+            (Expr::String(l), Expr::String(r)) if l == r => true,
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,

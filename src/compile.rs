@@ -402,6 +402,11 @@ pub fn compile_internal(
         Expr::Num(nr) => {
             chunk.code.push(VMInstruction::Constant(Expr::Num(*nr)));
         }
+        Expr::String(str) => {
+            chunk
+                .code
+                .push(VMInstruction::Constant(Expr::String(str.clone())));
+        }
         Expr::Boolean(bool) => {
             chunk
                 .code

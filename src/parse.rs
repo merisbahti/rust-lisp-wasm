@@ -18,6 +18,16 @@ fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(context("number", double), Expr::Num)(i)
 }
 
+fn parse_string(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
+    map(
+        context(
+            "string",
+            delimited(char('"'), many0(is_not("\"")), char('"')),
+        ),
+        |char_vec| Expr::String(char_vec.into_iter().collect()),
+    )(i)
+}
+
 fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("keyword", many1(is_not("\n\r )("))),
@@ -52,7 +62,13 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
             "quote",
             preceded(
                 tag("'"),
-                alt((parse_quote, parse_list, parse_number, parse_keyword)),
+                alt((
+                    parse_quote,
+                    parse_list,
+                    parse_number,
+                    parse_string,
+                    parse_keyword,
+                )),
             ),
         ),
         |exprs| Expr::Quote(Box::new(exprs)),
@@ -62,7 +78,13 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     delimited(
         multispace0,
-        alt((parse_quote, parse_list, parse_number, parse_keyword)),
+        alt((
+            parse_quote,
+            parse_list,
+            parse_number,
+            parse_string,
+            parse_keyword,
+        )),
         multispace0,
     )(i)
 }
@@ -87,6 +109,17 @@ fn test_parse_alphanumerics() {
 
     assert_eq!(parse("true"), Ok(vec![Expr::Boolean(true)]));
     assert_eq!(parse("false"), Ok(vec![Expr::Boolean(false)]));
+    assert_eq!(
+        parse("\"hello world\""),
+        Ok(vec![Expr::String("hello world".to_string())])
+    );
+    assert_eq!(
+        parse("(\"hello 1\" \"hello 2\" )"),
+        Ok(vec![make_pair_from_vec(vec![
+            Expr::String("hello 1".to_string()),
+            Expr::String("hello 2".to_string()),
+        ])])
+    );
     assert_eq!(parse("+"), kw("+"));
     assert_eq!(parse("'"), kw("'"));
     assert_eq!(parse("1"), nr(1.));
