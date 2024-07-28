@@ -1,12 +1,13 @@
+(define else true)
 (defmacro (dprint . exprs)
-  (print "=========")
-  (map (lambda (ss)
-        (if
+  '(print "=========")
+  '(map (lambda (ss)
+         (if
           (string? ss)
           (print ss)
           (print ss ": " (eval ss))))
     exprs)
-  (print "========="))
+  '(print "========="))
 
 (defmacro (cond . exprs)
   (define (fold-right op initial sequence)
@@ -22,6 +23,7 @@
                (cons 'if (cons predicate (cons consequent (cons acc '())))))
     '()
     exprs))
+(define (null? x) (nil? x))
 
 (define (not x)
   (cond
@@ -62,21 +64,16 @@
     '()
     (c-args seqs)))
 
-(define (map proc items)
-  (cond
-    ((null? items) nil)
-    (else
-      (cons (proc (car items))
-        (map proc (cdr items))))))
-
 (define (newline) (print ""))
 
 (define (filter predicate sequence)
-  (cond ((null? sequence) nil)
+  (cond
+    ((null? sequence)
+      nil)
     ((predicate (car sequence))
-      (cons (car sequence)
-        (filter predicate (cdr sequence))))
-    (else (filter predicate (cdr sequence)))))
+      (cons (car sequence) (filter predicate (cdr sequence))))
+    (true
+      (filter predicate (cdr sequence)))))
 
 (defmacro (assert a b)
   '(if '(= a b)
