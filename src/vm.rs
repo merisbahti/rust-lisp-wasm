@@ -41,6 +41,7 @@ pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
     pub envs: HashMap<String, Env>,
+    pub log: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -320,6 +321,7 @@ pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
         callframes: vec![],
         stack: vec![],
         envs: HashMap::from([("initial_env".to_string(), initial_env)]),
+        log: Vec::new(),
     }
 }
 
@@ -356,20 +358,20 @@ pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM
     Ok((vm, macros))
 }
 
-// just for tests
 #[allow(dead_code)]
-pub fn jit_run(input: String) -> Result<Expr, String> {
+pub fn jit_run_vm(input: String) -> Result<VM, String> {
     let prelude = get_prelude();
     let (mut vm, _) = match prelude.and_then(|env| prepare_vm(input, Some(env))) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
+    run(&mut vm, &get_globals()).map(|_| vm)
+}
 
-    match run(&mut vm, &get_globals()) {
-        Ok(e) => e,
-        Err(err) => return Result::Err(err),
-    };
-
+// just for tests
+#[allow(dead_code)]
+pub fn jit_run(input: String) -> Result<Expr, String> {
+    let vm = jit_run_vm(input)?;
     match vm.stack.first() {
         Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
         _ => Result::Err(format!(
