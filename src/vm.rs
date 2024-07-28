@@ -19,6 +19,7 @@ pub enum VMInstruction {
     Call(usize),
     CallBuiltIn(String),
     Return,
+    Display,
     Constant(Expr),
     BuiltIn(String),
 }
@@ -75,6 +76,14 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
     };
     callframe.ip += 1;
     match instruction {
+        VMInstruction::Display => {
+            if let Some(top) = vm.stack.pop() {
+                vm.log.push(top.to_string());
+                vm.stack.push(Expr::Nil);
+            } else {
+                return Err("no value to display on stack, compiler bug!".to_string());
+            }
+        }
         VMInstruction::PopStack => {
             vm.stack.pop();
         }

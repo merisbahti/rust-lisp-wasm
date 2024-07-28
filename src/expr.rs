@@ -2,9 +2,12 @@ use crate::vm::Chunk;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
+use gloo::history::query::ToQuery;
 use nom::lib::std::fmt::Formatter;
+use serde::de::IntoDeserializer;
 use serde::Deserialize;
 use serde::Serialize;
+use std::ops::MulAssign;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Expr {
@@ -30,11 +33,28 @@ impl Display for Expr {
     ) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Expr::Nil => write!(formatter, "'()"),
-            Expr::Pair(x, y) => write!(formatter, "Pair({x:?}, {y:?})"),
-            Expr::Num(x) => write!(formatter, "Num({x:?})"),
-            Expr::Keyword(x) => write!(formatter, "Keyword({x:?})"),
-            Expr::Boolean(x) => write!(formatter, "Boolean({x:?})"),
-            Expr::Quote(xs) => write!(formatter, "Quote({xs:?})"),
+            Expr::Pair(x, box Expr::Nil) => write!(formatter, "({x:?})"),
+            Expr::Pair(x, r @ box Expr::Pair(_, _)) => {
+                let mut r_string = format!("{r}");
+                // remove parens for niceness
+                r_string.pop();
+                r_string.remove(0);
+                write!(formatter, "({x:?} {r_string})")
+            }
+            Expr::Pair(x, y) => write!(formatter, "({x:?} . {y:?})"),
+            Expr::Num(x) => {
+                let mut string_value = format!("{:#?}", x);
+                if string_value.ends_with(".0") {
+                    string_value.pop();
+                    string_value.pop();
+                    write!(formatter, "{}", string_value)
+                } else {
+                    write!(formatter, "{:#?}", x)
+                }
+            }
+            Expr::Keyword(x) => write!(formatter, "{x}"),
+            Expr::Boolean(x) => write!(formatter, "{x:?}"),
+            Expr::Quote(xs) => write!(formatter, "'{xs:?}"),
             Expr::Lambda(xs, vars, variadic, env) => {
                 write!(formatter, "Lambda({xs:?}, {vars:?}, {variadic:?}, {env:?})")
             }
@@ -51,10 +71,10 @@ impl Display for Expr {
 #[test]
 fn test_display() {
     let bool_expr = Expr::Boolean(true);
-    assert_eq!(format!("{bool_expr}"), "Boolean(true)");
+    assert_eq!(format!("{bool_expr}"), "true");
 
     let bool_expr_2 = Expr::Boolean(false);
-    assert_eq!(format!("{bool_expr_2}"), "Boolean(false)");
+    assert_eq!(format!("{bool_expr_2}"), "false");
 
     let empty_list = crate::parse::make_pair_from_vec(vec![]);
     assert_eq!(format!("{empty_list}"), "'()");
@@ -64,10 +84,7 @@ fn test_display() {
         Expr::Num(5.0),
         crate::parse::make_pair_from_vec(vec![Expr::Keyword("hello".to_string())]),
     ]);
-    assert_eq!(
-        format!("{list_with_values}"),
-        "Pair(Boolean(false), Pair(Num(5.0), Pair(Pair(Keyword(\"hello\"), '()), '())))"
-    );
+    assert_eq!(format!("{list_with_values}"), "(false 5 (hello))");
 }
 
 impl Debug for Expr {

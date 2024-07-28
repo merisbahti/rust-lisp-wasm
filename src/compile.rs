@@ -363,6 +363,18 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
+        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
+            if kw == "display" =>
+        {
+            compile_internal(&displayee, chunk, globals)?;
+            chunk.code.push(VMInstruction::Display);
+        }
+        Expr::Pair(box Expr::Keyword(kw), box otherwise) if kw == "display" => {
+            return Err(format!(
+                "Expected one argument for display, but found {}",
+                otherwise
+            ))
+        }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
             let arity = builtin_arity(builtin);

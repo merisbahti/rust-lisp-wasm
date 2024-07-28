@@ -1,7 +1,5 @@
 #[test]
 fn test_print() {
-    use crate::expr::Expr;
-    use crate::vm::jit_run;
     use crate::vm::jit_run_vm;
 
     fn run_and_get_log(input: &str) -> Vec<String> {
@@ -19,17 +17,10 @@ fn test_print() {
     );
     assert_eq!(
         run_and_get_log("(display (cons 1 (cons 2 '())))"),
-        vec!["(1 . 2)".to_string()]
+        vec!["(1 2)".to_string()]
     );
-
     assert_eq!(
-        jit_run(
-            "
-            (defmacro (three) 3)
-            (defmacro (add) (cons '+ (cons (three) (cons (three) '())))) (add)
-            "
-            .to_string()
-        ),
-        Ok(Expr::Num(6.0))
-    )
+        run_and_get_log("(display '(true false 1 10.5))"),
+        vec!["(true false 1 10.5)".to_string()]
+    );
 }
