@@ -8,6 +8,21 @@
     exprs)
   (print "========="))
 
+(defmacro (cond . exprs)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+  (fold-right (lambda (curr acc)
+               (define predicate (car curr))
+               (define consequent (car (cdr curr)))
+               (cons 'if (cons predicate (cons consequent (cons acc '())))))
+    '()
+    exprs))
+
 (define (not x)
   (cond
     (x false)

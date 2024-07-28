@@ -15,3 +15,10 @@ fn call_function_defined_in_prelude() {
     let res = crate::vm::jit_run("(fold-right (lambda (x y) (+ x y)) 0 '(1 2 3 4 5))".to_string());
     assert_eq!(res, Ok(Expr::Num(15.0)));
 }
+
+#[test]
+fn call_macro_defined_in_prelude() {
+    use crate::expr::Expr;
+    let res = crate::vm::jit_run("(cond (false 2) (true 3))".to_string());
+    assert_eq!(res, Ok(Expr::Num(3.0)));
+}
