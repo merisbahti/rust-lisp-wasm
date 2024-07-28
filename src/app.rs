@@ -1,9 +1,11 @@
 use crate::compile::get_globals;
 use crate::expr::Expr;
 use crate::vm;
+use crate::vm::get_prelude;
 use crate::vm::prepare_vm;
 use crate::vm::run;
 use crate::vm::Callframe;
+use crate::vm::VM;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::UnwrapThrowExt;
@@ -60,7 +62,7 @@ pub fn app() -> Html {
   (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
             .to_string(),
-        "(defmacro (m a) (list + a 2))
+        "(defmacro (m a) (cons '+ (cons a (cons 2 '()))))
         (m 2)"
             .to_string(),
     ];
@@ -72,14 +74,24 @@ pub fn app() -> Html {
     });
 
     let source = (*source_handle).clone();
+    fn prepare_with_prelude(src: String) -> Result<VM, String> {
+        match get_prelude() {
+            Ok(prelude) => prepare_vm(src, Some(prelude)).map(|x| x.0),
+            Err(err) => Err(format!("Error when compiling prelude: {err}")),
+        }
+    }
 
-    let vm_handle = use_state(|| vm::prepare_vm(source.clone()));
+    let vm_handle = use_state(|| prepare_with_prelude(source.clone()));
     let vm = (*vm_handle).clone();
 
     use_effect_with_deps(
         {
             let vm_handle = vm_handle.clone();
-            move |arg: &String| vm_handle.set(vm::prepare_vm(arg.clone()))
+            move |arg: &String| {
+                let prepared_vm = prepare_with_prelude(arg.clone());
+
+                vm_handle.set(prepared_vm)
+            }
         },
         source.clone(),
     );
@@ -112,7 +124,9 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let res = prepare_vm(source.clone()).and_then(|mut vm| {
+            let prepared_vm = prepare_with_prelude(source.clone());
+
+            let res = prepared_vm.and_then(|mut vm| {
                 run(&mut vm, &get_globals())?;
                 Ok(vm)
             });
