@@ -331,7 +331,7 @@ pub struct CompilerEnv {
 }
 
 pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM, Macros), String> {
-    let compiler_env = initial_env.unwrap_or(CompilerEnv::default());
+    let compiler_env = initial_env.unwrap_or_default();
     let exprs = match parse::parse(&input) {
         Ok(res) => res,
         Err(err) => return Err(err),
@@ -704,8 +704,8 @@ fn compiled_test() {
             "
             .to_string()
         ),
-        parse::parse("(+ 1 (+ 2 0))").and_then(|x| match x.first() {
-            Some(x) => Ok(x.clone()),
+        parse::parse("(+ 1 (+ 2 0))").map(|x| match x.first() {
+            Some(x) => x.clone(),
             None => panic!(),
         })
     );

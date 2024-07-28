@@ -21,7 +21,7 @@ pub struct StackProps {
 pub fn Stack(props: &StackProps) -> Html {
     html! {
         <div class="stack">
-            if props.stack.len() == 0 {
+            if props.stack.is_empty() {
                 { "empty stack" }
             }
             { props.stack.clone().into_iter().rev().map(|stack_item|
@@ -53,8 +53,7 @@ pub fn Callframes(props: &CallFramesProps) -> Html {
 
 #[function_component(App)]
 pub fn app() -> Html {
-    let fib = vec![
-        "(define fib (lambda (n) 
+    let fib = ["(define fib (lambda (n) 
   (fib-iter 1 0 n)))
 (define fib-iter (lambda (a b count)
 (if (= count 0)
@@ -64,12 +63,10 @@ pub fn app() -> Html {
             .to_string(),
         "(defmacro (m a) (cons '+ (cons a (cons 2 '()))))
         (m 2)"
-            .to_string(),
-    ];
+            .to_string()];
 
     let source_handle = use_state(|| {
-        fib.get(1)
-            .map(|x| x.clone())
+        fib.get(1).cloned()
             .unwrap_or("not found".to_string())
     });
 

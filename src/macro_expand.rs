@@ -8,11 +8,8 @@ use crate::{
     vm::{get_initial_vm_and_chunk, Chunk, Env, VMInstruction},
 };
 
-pub fn make_macro(
-    params: &Vec<String>,
-    macro_definition: &Expr,
-    macros: &mut HashMap<String, MacroFn>,
-) -> MacroFn {
+pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
+    let params: Vec<String> = params.into();
     Arc::new({
         let macro_definition = macro_definition.clone();
         let all_kws = params.clone();
@@ -63,7 +60,7 @@ pub fn make_macro(
                 .zip(args.clone())
                 .collect::<HashMap<String, Expr>>();
 
-            variadic.clone().inspect(|arg_name| {
+            variadic.inspect(|arg_name| {
                 let (_, pairs) = args.split_at(vars.len());
                 map.insert(
                     arg_name.clone().clone(),
@@ -149,13 +146,13 @@ pub fn macro_expand(
                 let args = collect_kws_from_expr(&args)
                     .map_err(|_| "Error when collecting kws for macro definition")?;
                 let expanded_macro_body = macro_expand_one(&macro_body, macros)?;
-                let new_macro = make_macro(&args, &expanded_macro_body, macros);
+                let new_macro = make_macro(&args, &expanded_macro_body);
                 macros.insert(macro_name.clone(), new_macro);
             }
             otherwise => expanded_exprs.push(macro_expand_one(&otherwise, macros)?),
         }
     }
-    return Ok(expanded_exprs);
+    Ok(expanded_exprs)
 }
 
 #[test]
@@ -164,15 +161,12 @@ fn expansion_noop_test() {
     fn noop_assertion(input: &str) {
         let macros = &mut HashMap::new();
         assert_eq!(
-            parse(input).and_then(|parsed| macro_expand(parsed, macros)),
             parse(input)
-                .map(|x| x
-                    .iter()
-                    .map(|x| Some(x.clone()))
-                    .flatten()
-                    .collect::<Vec<Expr>>()
-                    .clone())
-                .clone()
+                .and_then(|parsed| macro_expand(parsed, macros))
+                .unwrap(),
+            parse(input)
+                .map(|x| x.into_iter().collect::<Vec<Expr>>().clone())
+                .unwrap()
         )
     }
     noop_assertion("1");

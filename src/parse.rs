@@ -81,7 +81,7 @@ fn test_parse_alphanumerics() {
     fn kw(string: &str) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::Keyword(string.to_string())])
     }
-    fn nr<'a>(nr: f64) -> Result<Vec<Expr>, String> {
+    fn nr(nr: f64) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::Num(nr)])
     }
 
@@ -104,10 +104,7 @@ fn test_parse_quote() {
     assert_eq!(res.as_ref().map(|x| x.len()), Ok(1));
 
     let borrowed = res.map(|x| x.first().cloned()).unwrap().unwrap();
-    assert!(match borrowed {
-        Expr::Quote(box Expr::Nil) => true,
-        _ => false,
-    });
+    matches!(borrowed, Expr::Quote(box Expr::Nil),);
 
     let res2 = parse("'(a b)")
         .map(|x| x.first().cloned())
@@ -115,13 +112,10 @@ fn test_parse_quote() {
         .unwrap();
 
     assert!(match res2 {
-        Expr::Quote(box rc) => match rc {
-            Expr::Pair(
-                box Expr::Keyword(a),
-                box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
-            ) => a == *"a" && b == *"b",
-            _ => false,
-        },
+        Expr::Quote(box Expr::Pair(
+            box Expr::Keyword(a),
+            box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
+        )) => a == *"a" && b == *"b",
         _ => false,
     });
 

@@ -1,7 +1,7 @@
 #[test]
 fn prelude_compiles() {
     let env = crate::vm::get_prelude();
-    assert_eq!(env.is_ok(), true);
+    assert!(env.is_ok());
     assert!(
         env.map(|x| x.env.map.keys().cloned().collect::<Vec<String>>().len())
             .unwrap()
