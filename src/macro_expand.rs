@@ -16,10 +16,8 @@ pub fn make_macro(
     Arc::new({
         let macro_definition = macro_definition.clone();
         let all_kws = params.clone();
-        let macros = macros.clone();
 
         move |args| {
-            let mut macros = macros.clone();
             let dot_kw = all_kws
                 .iter()
                 .enumerate()
