@@ -80,7 +80,7 @@ pub fn make_macro(
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk, &get_globals(), &mut macros)?;
+            compile_many_exprs(macro_exprs, &mut chunk, &get_globals())?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {

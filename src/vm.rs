@@ -344,12 +344,7 @@ pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM
     let mut macros = compiler_env.macros.clone();
     let macro_expanded = macro_expand(exprs, &mut macros)?;
 
-    compile_many_exprs(
-        macro_expanded,
-        &mut chunk,
-        &get_globals(),
-        &mut HashMap::new(),
-    )?;
+    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())?;
 
     let callframe = Callframe {
         ip: 0,
