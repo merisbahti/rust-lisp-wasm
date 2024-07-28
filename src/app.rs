@@ -53,7 +53,8 @@ pub fn Callframes(props: &CallFramesProps) -> Html {
 
 #[function_component(App)]
 pub fn app() -> Html {
-    let fib = ["(define fib (lambda (n) 
+    let fib = [
+        "(define fib (lambda (n) 
   (fib-iter 1 0 n)))
 (define fib-iter (lambda (a b count)
 (if (= count 0)
@@ -63,12 +64,10 @@ pub fn app() -> Html {
             .to_string(),
         "(defmacro (m a) (cons '+ (cons a (cons 2 '()))))
         (m 2)"
-            .to_string()];
+            .to_string(),
+    ];
 
-    let source_handle = use_state(|| {
-        fib.get(1).cloned()
-            .unwrap_or("not found".to_string())
-    });
+    let source_handle = use_state(|| fib.get(1).cloned().unwrap_or("not found".to_string()));
 
     let source = (*source_handle).clone();
     fn prepare_with_prelude(src: String) -> Result<VM, String> {
@@ -139,6 +138,11 @@ pub fn app() -> Html {
                     <div style="display: flex; gap: 8px">
                         <button onclick={step} style="flex-grow: 1;">{ "step" }</button>
                         <button onclick={run} style="flex-grow: 1;">{ "run" }</button>
+                    </div>
+                    <div class="console">
+                        if let Ok(vm) = vm.clone() {
+                            { vm.log.into_iter().map(|log| html!{<div>{log}</div>}).collect::<Html>() }
+                        }
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: row; gap: 8px;">
