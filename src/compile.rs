@@ -49,6 +49,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "string?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::String(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
             "function?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
                 Expr::Lambda(..) => Ok(Expr::Boolean(true)),
@@ -131,6 +138,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             BuiltIn::OneArg(|pair| match pair {
                 Expr::Pair(.., box r) => Ok(r.clone()),
                 _ => Err(format!("cdr expected pair, found: {:?}", pair)),
+            }),
+        ),
+        (
+            "str-append".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::String(l), Expr::String(r)) => Ok(Expr::String(l.clone() + r)),
+                _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
             }),
         ),
     ])

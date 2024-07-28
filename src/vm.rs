@@ -762,4 +762,26 @@ fn compiled_test() {
         ),
         Ok(Expr::Num(15.0),)
     );
+
+    assert_eq!(
+        jit_run(
+            "
+            (str-append (str-append \"hello\" \" \") \"world\")
+            "
+            .to_string()
+        ),
+        Ok(Expr::String("hello world".to_string()),)
+    );
+
+    let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
+    assert_eq!(
+        jit_run(example_str.to_string()),
+        Ok(make_pairs_from_vec(vec![
+            Expr::Boolean(true),
+            Expr::Boolean(false),
+            Expr::Boolean(false),
+            Expr::Boolean(false),
+            Expr::Boolean(false)
+        ]))
+    );
 }
