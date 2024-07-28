@@ -1,4 +1,23 @@
 (define else true)
+(defmacro (progn . xs)
+  (cons (cons 'lambda (cons '() xs)) '()))
+
+(defmacro (print . xs)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+  (cons 'display (cons
+                  (fold-right
+                    (lambda (curr acc)
+                      (cons 'str-append (cons curr (cons acc '()))))
+                    ""
+                    xs)
+                  '())))
+
 (defmacro (dprint . exprs)
   '(print "=========")
   '(map (lambda (ss)
@@ -12,6 +31,7 @@
 (defmacro (cond . exprs)
   (define (fold-right op initial sequence)
     (if
+
       (nil? sequence)
       initial
       (op

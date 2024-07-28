@@ -23,4 +23,18 @@ fn test_print() {
         run_and_get_log("(display '(true false 1 10.5))"),
         vec!["(true false 1 10.5)".to_string()]
     );
+    assert_eq!(
+        run_and_get_log(
+            "
+            (progn 
+              (display 1)
+              (display 2)
+              (display 3))"
+        ),
+        vec!["1", "2", "3"]
+    );
+    assert_eq!(
+        run_and_get_log(r#"(print "hello" " " "there")"#),
+        vec!["hello there"]
+    );
 }

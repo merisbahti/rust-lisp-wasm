@@ -57,7 +57,7 @@ impl Display for Expr {
                 write!(formatter, "Lambda({xs:?}, {vars:?}, {variadic:?}, {env:?})")
             }
             Expr::String(s) => {
-                write!(formatter, "string {s:?}")
+                write!(formatter, "{s}")
             }
             Expr::LambdaDefinition(xs, variadic, vars) => {
                 write!(
