@@ -498,7 +498,7 @@ fn losta_compile() {
         ]
     );
     assert_eq!(
-        crate::vm::prepare_vm("(+ 1 2 3)".to_string()),
+        crate::vm::prepare_vm("(+ 1 2 3)".to_string(), None).map(|x| x.0),
         Err("Expected 2 arguments for +, but found 3".to_string())
     );
 

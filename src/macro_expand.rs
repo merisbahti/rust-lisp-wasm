@@ -1,10 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use gloo::history::Location;
-
 use crate::compile::{collect_exprs_from_body, collect_kws_from_expr, compile_many_exprs};
-use crate::macro_expand;
-use crate::parse::parse;
 use crate::vm::{run, Callframe};
 use crate::{
     compile::{get_globals, make_pairs_from_vec, MacroFn},
@@ -79,7 +75,7 @@ pub fn make_macro(
 
             let initial_env = Env { map, parent: None };
 
-            let mut vm = get_initial_vm_and_chunk();
+            let mut vm = get_initial_vm_and_chunk(initial_env);
 
             let mut chunk = Chunk { code: vec![] };
 
@@ -94,7 +90,6 @@ pub fn make_macro(
             };
             // add params and args in vm envs (unevaluated)
             vm.callframes.push(callframe);
-            vm.envs.insert("initial_env".to_string(), initial_env);
 
             match run(&mut vm, &get_globals()) {
                 Ok(e) => e,
@@ -167,6 +162,7 @@ pub fn macro_expand(
 
 #[test]
 fn expansion_noop_test() {
+    use crate::parse::parse;
     fn noop_assertion(input: &str) {
         let macros = &mut HashMap::new();
         assert_eq!(
@@ -194,6 +190,7 @@ fn expansion_noop_test() {
 
 #[test]
 fn expansion_test() {
+    use crate::parse::parse;
     fn noop_test(input: &str, expected: &Expr) {
         let macros = &mut HashMap::new();
         assert_eq!(

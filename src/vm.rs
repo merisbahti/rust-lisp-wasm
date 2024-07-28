@@ -1,4 +1,4 @@
-use crate::macro_expand::macro_expand;
+use crate::{compile::MacroFn, macro_expand::macro_expand};
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub enum VMInstruction {
     BuiltIn(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Env {
     pub map: HashMap<String, Expr>,
     pub parent: Option<String>,
@@ -307,7 +307,7 @@ fn test_add() {
         env: "none".to_string(),
     };
 
-    let mut vm = get_initial_vm_and_chunk();
+    let mut vm = get_initial_vm_and_chunk(Env::default());
     vm.callframes.push(callframe);
 
     assert!(run(&mut vm, &get_globals()).is_ok());
@@ -315,32 +315,33 @@ fn test_add() {
     debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
 }
 
-pub fn get_initial_vm_and_chunk() -> VM {
+pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
     VM {
         callframes: vec![],
         stack: vec![],
-        envs: HashMap::from([(
-            "initial_env".to_string(),
-            Env {
-                map: HashMap::new(),
-                parent: None,
-            },
-        )]),
+        envs: HashMap::from([("initial_env".to_string(), initial_env)]),
     }
 }
 
-pub fn prepare_vm(input: String) -> Result<VM, String> {
-    // parse, compile and run, then check what's left on the stack
+pub type Macros = HashMap<String, MacroFn>;
+#[derive(Default)]
+pub struct CompilerEnv {
+    pub env: Env,
+    pub macros: Macros,
+}
+
+pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM, Macros), String> {
+    let compiler_env = initial_env.unwrap_or(CompilerEnv::default());
     let exprs = match parse::parse(&input) {
         Ok(res) => res,
         Err(err) => return Err(err),
     };
 
-    let mut vm = get_initial_vm_and_chunk();
+    let mut vm = get_initial_vm_and_chunk(compiler_env.env);
 
     let mut chunk = Chunk { code: vec![] };
 
-    let mut macros = HashMap::new();
+    let mut macros = compiler_env.macros.clone();
     let macro_expanded = macro_expand(exprs, &mut macros)?;
 
     compile_many_exprs(
@@ -357,13 +358,14 @@ pub fn prepare_vm(input: String) -> Result<VM, String> {
     };
     vm.callframes.push(callframe);
 
-    Ok(vm)
+    Ok((vm, macros))
 }
 
 // just for tests
 #[allow(dead_code)]
 pub fn jit_run(input: String) -> Result<Expr, String> {
-    let mut vm = match prepare_vm(input) {
+    let prelude = get_prelude();
+    let (mut vm, _) = match prelude.and_then(|env| prepare_vm(input, Some(env))) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
@@ -382,14 +384,17 @@ pub fn jit_run(input: String) -> Result<Expr, String> {
     }
 }
 
-pub fn get_prelude() -> Result<Env, String> {
+pub fn get_prelude() -> Result<CompilerEnv, String> {
     let prelude_string = include_str!("../prelude.scm").to_string();
-    let mut vm = prepare_vm(prelude_string)
+    let (mut vm, macros) = prepare_vm(prelude_string, None)
         .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
     run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {:?}", err))?;
 
     match vm.envs.get("initial_env") {
-        Some(env) => Ok(env.clone()),
+        Some(env) => Ok(CompilerEnv {
+            env: env.clone(),
+            macros,
+        }),
         None => Err("Could not find initial env when compiling prelude.".to_string()),
     }
 }

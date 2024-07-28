@@ -1,6 +1,3 @@
-(defmacro (cond . exprs)
-  exprs)
-
 (defmacro (dprint . exprs)
   (print "=========")
   (map (lambda (ss)
@@ -140,13 +137,12 @@
   (iter initial sequence))
 
 (define (fold-right op initial sequence)
-  (cond
-    ((null? sequence)
-      initial)
-    (else
-      (op
-        (car sequence)
-        (fold-right op initial (cdr sequence))))))
+  (if
+    (null? sequence)
+    initial
+    (op
+      (car sequence)
+      (fold-right op initial (cdr sequence)))))
 (define
   (flatmap proc seq)
   (accumulate append '() (map proc seq)))
