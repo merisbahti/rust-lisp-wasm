@@ -30,7 +30,7 @@
   (display
     (fold-right
       (lambda (curr acc)
-        (str-append curr acc))
+        (str-append (to-string curr) acc))
       ""
       xs)))
 
@@ -58,12 +58,10 @@
         (cons (proc (car items))
           (map proc (cdr items))))))
 
-  (map (lambda (ss)
-        (if
-          (string? ss)
-          (syntax-list 'print ss)
-          (syntax-list 'print ss ": " ss)))
-    exprs))
+  (progn
+    (syntax-list 'print "hello")
+    (syntax-list 'print "hello")
+    (syntax-list 'print "world")))
 
 (define (null? x) (nil? x))
 

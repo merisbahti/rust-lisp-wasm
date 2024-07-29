@@ -65,9 +65,12 @@ pub fn app() -> Html {
         "(defmacro (m a) (cons '+ (cons a (cons 2 '()))))
         (m 2)"
             .to_string(),
+        r#"(define a "stuff")
+            (dprint 1 a "hello")"#
+            .to_string(),
     ];
 
-    let source_handle = use_state(|| fib.get(1).cloned().unwrap_or("not found".to_string()));
+    let source_handle = use_state(|| fib.last().cloned().unwrap_or("not found".to_string()));
 
     let source = (*source_handle).clone();
     fn prepare_with_prelude(src: String) -> Result<VM, String> {
@@ -155,7 +158,7 @@ pub fn app() -> Html {
                         </div>
                     }
                     if let Err(error) = vm.clone() {
-                        <div class="error">{ format!("Error: {:}", error) }</div>
+                        <div class="error">{ format!("{:}", error) }</div>
                     }
                 </div>
             </div>
