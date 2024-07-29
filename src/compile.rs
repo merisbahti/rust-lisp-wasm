@@ -326,16 +326,19 @@ fn make_and(
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
         otherwise => return Err(format!("and, expected two args but found: {:?}", otherwise)),
     };
+    // l + popjmp(r) + jmp(return) + r + return
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(r, &mut r_chunk, globals)?;
     compile_internal(l, chunk, globals)?;
-    chunk.code.push(VMInstruction::If(
-        r_chunk.code.len() + 1,
-        // one extra return for consequent
-    ));
+    chunk.code.push(VMInstruction::CondJump(2));
+    chunk
+        .code
+        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk
+        .code
+        .push(VMInstruction::CondJumpPop(1 + r_chunk.code.len()));
+    chunk.code.push(VMInstruction::PopStack);
     chunk.code.extend_from_slice(&r_chunk.code);
-    chunk.code.push(VMInstruction::Return);
-    compile_internal(l, chunk, globals)?;
     Ok(())
 }
 
