@@ -24,6 +24,17 @@ fn test_call_other_macro_from_macro() {
             .to_string()
         ),
         Ok(Expr::Num(6.0))
+    );
+    assert_eq!(
+        jit_run(
+            "
+            (defmacro (five) 5)
+            (defmacro (add) (syntax-list '+  (five) (five))) 
+            (add)
+            "
+            .to_string()
+        ),
+        Ok(Expr::Num(10.0))
     )
 }
 

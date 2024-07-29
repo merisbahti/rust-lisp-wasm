@@ -1,6 +1,6 @@
 (define else true)
 
-(defmacro (list . xs)
+(defmacro (syntax-list . xs)
   (define (fold-right op initial sequence)
     (if
       (nil? sequence)
@@ -8,18 +8,18 @@
       (op
         (car sequence)
         (fold-right op initial (cdr sequence)))))
-  (cons
-    (fold-right
-      (lambda (curr acc)
-        (cons 'cons (cons curr (cons acc '()))))
-      '()
-      xs)
-    '()))
+  (fold-right
+    (lambda (curr acc)
+      (cons 'cons (cons curr (cons acc '()))))
+    '()
+    xs))
+
+(define (list . xs) xs)
 
 (defmacro (progn . xs)
-  (cons (cons 'lambda (cons '() xs)) '()))
+  (syntax-list (cons 'lambda (cons '() xs))))
 
-(defmacro (print . xs)
+(define (print . xs)
   (define (fold-right op initial sequence)
     (if
       (nil? sequence)
@@ -27,23 +27,12 @@
       (op
         (car sequence)
         (fold-right op initial (cdr sequence)))))
-  (cons 'display (cons
-                  (fold-right
-                    (lambda (curr acc)
-                      (cons 'str-append (cons curr (cons acc '()))))
-                    ""
-                    xs)
-                  '())))
-
-(defmacro (dprint . exprs)
-  '(print "=========")
-  '(map (lambda (ss)
-         (if
-          (string? ss)
-          (print ss)
-          (print ss ": " (eval ss))))
-    exprs)
-  '(print "========="))
+  (display
+    (fold-right
+      (lambda (curr acc)
+        (str-append curr acc))
+      ""
+      xs)))
 
 (defmacro (cond . exprs)
   (define (fold-right op initial sequence)
@@ -60,6 +49,22 @@
                (cons 'if (cons predicate (cons consequent (cons acc '())))))
     '()
     exprs))
+
+(defmacro (dprint . exprs)
+  (define (map proc items)
+    (cond
+      ((nil? items) '())
+      (true
+        (cons (proc (car items))
+          (map proc (cdr items))))))
+
+  (map (lambda (ss)
+        (if
+          (string? ss)
+          (syntax-list 'print ss)
+          (syntax-list 'print ss ": " ss)))
+    exprs))
+
 (define (null? x) (nil? x))
 
 (define (not x)
@@ -113,7 +118,15 @@
       (filter predicate (cdr sequence)))))
 
 (defmacro (assert a b)
-  (cons 'if (cons (cons '= (cons a (cons b '()))) (cons '() (cons (cons 'display (cons "assertion failed" '())) '())))))
+  (syntax-list 'if (syntax-list '= a b) '()
+    (syntax-list 'print "assertion failed, found: "
+      (syntax-list 'to-string a)
+      " but expected: "
+      (syntax-list 'to-string b)
+      ". "
+      (to-string a)
+      " != "
+      (to-string b))))
 
 (define (reverse x)
   (def reverse-iter

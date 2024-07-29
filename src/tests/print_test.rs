@@ -40,6 +40,6 @@ fn test_print() {
 
     assert_eq!(
         run_and_get_log(r#"(assert (+ 1 1) 1)"#),
-        vec!["assertion failed"]
+        vec!["assertion failed, found: 2 but expected: 1. (+ 1 1) != 1"]
     );
 }

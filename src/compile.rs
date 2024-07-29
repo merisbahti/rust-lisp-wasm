@@ -147,6 +147,10 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                 _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
             }),
         ),
+        (
+            "to-string".to_string(),
+            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string()))),
+        ),
     ])
 }
 
