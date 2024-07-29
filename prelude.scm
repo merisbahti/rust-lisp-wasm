@@ -16,8 +16,8 @@
 
 (define (list . xs) xs)
 
-(defmacro (progn . xs)
-  (syntax-list (cons 'lambda (cons '() xs))))
+(define (progn . xs)
+  (cons 'lambda (cons '() xs)))
 
 (define (print . xs)
   (define (fold-right op initial sequence)
@@ -57,11 +57,14 @@
       (true
         (cons (proc (car items))
           (map proc (cdr items))))))
+  (define separator "=========")
 
-  (progn
-    (syntax-list 'print "hello")
-    (syntax-list 'print "hello")
-    (syntax-list 'print "world")))
+  (cons 'progn
+    (map (lambda (x)
+          (if (string? x)
+            (syntax-list 'print x)
+            (syntax-list 'print (to-string x) " = " (syntax-list 'to-string x))))
+      (cons "===dprint===" exprs))))
 
 (define (null? x) (nil? x))
 
