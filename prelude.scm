@@ -1,4 +1,21 @@
 (define else true)
+
+(defmacro (list . xs)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+  (cons
+    (fold-right
+      (lambda (curr acc)
+        (cons 'cons (cons curr (cons acc '()))))
+      '()
+      xs)
+    '()))
+
 (defmacro (progn . xs)
   (cons (cons 'lambda (cons '() xs)) '()))
 
@@ -96,9 +113,7 @@
       (filter predicate (cdr sequence)))))
 
 (defmacro (assert a b)
-  '(if '(= a b)
-    'null
-    '(print "assertion failed, found: " a ", but expected: " a " (" 'a " != " 'b ")")))
+  (cons 'if (cons (cons '= (cons a (cons b '()))) (cons '() (cons (cons 'display (cons "assertion failed" '())) '())))))
 
 (define (reverse x)
   (def reverse-iter

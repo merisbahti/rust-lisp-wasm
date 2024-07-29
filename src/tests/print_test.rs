@@ -37,4 +37,9 @@ fn test_print() {
         run_and_get_log(r#"(print "hello" " " "there")"#),
         vec!["hello there"]
     );
+
+    assert_eq!(
+        run_and_get_log(r#"(assert (+ 1 1) 1)"#),
+        vec!["assertion failed"]
+    );
 }

@@ -156,7 +156,6 @@ pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
             Box::new(head.clone()),
             Box::new(make_pair_from_vec(tail.to_vec())),
         ),
-
         None => Expr::Nil,
     }
 }
@@ -174,6 +173,7 @@ pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
 
 pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
+        Expr::Nil => Ok(vec![]),
         Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
         Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
             collect_exprs_from_body(next).map(|mut x| {
@@ -181,7 +181,10 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
                 x
             })
         }
-        _ => Ok(vec![]),
+        otherwise => Err(format!(
+            "tried to collect exprs from body on: {}",
+            otherwise
+        )),
     }
 }
 fn make_lambda(
