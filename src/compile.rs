@@ -305,14 +305,14 @@ fn make_if(
 
     chunk.code.extend_from_slice(&pred_chunk.code);
 
-    chunk.code.push(VMInstruction::CondJump(cons_ip));
+    chunk.code.push(VMInstruction::CondJumpPop(cons_ip));
 
     chunk.code.extend_from_slice(&alt_chunk.code);
 
     chunk
         .code
         .push(VMInstruction::Constant(Expr::Boolean(true)));
-    chunk.code.push(VMInstruction::CondJump(end_ip));
+    chunk.code.push(VMInstruction::CondJumpPop(end_ip));
     chunk.code.extend_from_slice(&cons_chunk.code);
     Ok(())
 }
@@ -349,15 +349,13 @@ fn make_or(
         otherwise => return Err(format!("or, expected two args but found: {:?}", otherwise)),
     };
     let mut r_chunk = Chunk { code: vec![] };
-    compile_internal(l, &mut r_chunk, globals)?;
+    compile_internal(r, &mut r_chunk, globals)?;
     compile_internal(l, chunk, globals)?;
-    chunk.code.push(VMInstruction::If(
-        r_chunk.code.len() + 1,
-        // one extra return for consequent
-    ));
+    chunk
+        .code
+        .push(VMInstruction::CondJump(1 + r_chunk.code.len()));
+    chunk.code.push(VMInstruction::PopStack);
     chunk.code.extend_from_slice(&r_chunk.code);
-    chunk.code.push(VMInstruction::Return);
-    compile_internal(r, chunk, globals)?;
     Ok(())
 }
 
@@ -602,10 +600,10 @@ fn lambda_compile_test() {
         parse_and_compile("(if 1 2 3)").code,
         vec![
             VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::CondJump(3),
+            VMInstruction::CondJumpPop(3),
             VMInstruction::Constant(Expr::Num(3.0)),
             VMInstruction::Constant(Expr::Boolean(true)),
-            VMInstruction::CondJump(1),
+            VMInstruction::CondJumpPop(1),
             VMInstruction::Constant(Expr::Num(2.0)),
         ]
     );
