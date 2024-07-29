@@ -49,6 +49,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "string?".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::String(..) => Ok(Expr::Boolean(true)),
+                _ => Ok(Expr::Boolean(false)),
+            }),
+        ),
+        (
             "function?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
                 Expr::Lambda(..) => Ok(Expr::Boolean(true)),
@@ -133,6 +140,17 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                 _ => Err(format!("cdr expected pair, found: {:?}", pair)),
             }),
         ),
+        (
+            "str-append".to_string(),
+            BuiltIn::TwoArg(|l, r| match (l, r) {
+                (Expr::String(l), Expr::String(r)) => Ok(Expr::String(l.clone() + r)),
+                _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
+            }),
+        ),
+        (
+            "to-string".to_string(),
+            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string()))),
+        ),
     ])
 }
 
@@ -142,7 +160,6 @@ pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
             Box::new(head.clone()),
             Box::new(make_pair_from_vec(tail.to_vec())),
         ),
-
         None => Expr::Nil,
     }
 }
@@ -160,6 +177,7 @@ pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
 
 pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
+        Expr::Nil => Ok(vec![]),
         Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
         Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
             collect_exprs_from_body(next).map(|mut x| {
@@ -167,7 +185,10 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
                 x
             })
         }
-        _ => Ok(vec![]),
+        otherwise => Err(format!(
+            "tried to collect exprs from body on: {}",
+            otherwise
+        )),
     }
 }
 fn make_lambda(
@@ -363,6 +384,18 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
+        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
+            if kw == "display" =>
+        {
+            compile_internal(&displayee, chunk, globals)?;
+            chunk.code.push(VMInstruction::Display);
+        }
+        Expr::Pair(box Expr::Keyword(kw), box otherwise) if kw == "display" => {
+            return Err(format!(
+                "Expected one argument for display, but found {}",
+                otherwise
+            ))
+        }
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
             let exprs = collect_exprs_from_body(r)?;
             let arity = builtin_arity(builtin);
@@ -389,6 +422,11 @@ pub fn compile_internal(
         }
         Expr::Num(nr) => {
             chunk.code.push(VMInstruction::Constant(Expr::Num(*nr)));
+        }
+        Expr::String(str) => {
+            chunk
+                .code
+                .push(VMInstruction::Constant(Expr::String(str.clone())));
         }
         Expr::Boolean(bool) => {
             chunk

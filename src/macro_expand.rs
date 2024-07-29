@@ -120,10 +120,13 @@ pub fn macro_expand_one(
             })?;
             found_macro(&args)
         }
-        Expr::Pair(box l, box r) => {
-            let l_expanded = macro_expand_one(l, macros)?;
-            let r_expanded = macro_expand_one(r, macros)?;
-            Ok(Expr::Pair(Box::new(l_expanded), Box::new(r_expanded)))
+        pair @ Expr::Pair(_, _) => {
+            let exprs = collect_exprs_from_body(pair)?;
+            let expanded_exprs = exprs
+                .into_iter()
+                .map(|expr| macro_expand_one(&expr, macros))
+                .collect::<Result<Vec<Expr>, String>>()?;
+            Ok(make_pairs_from_vec(expanded_exprs))
         }
         otherwise => Ok(otherwise.clone()),
     }

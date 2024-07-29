@@ -1,17 +1,43 @@
 (define else true)
-(defmacro (dprint . exprs)
-  '(print "=========")
-  '(map (lambda (ss)
-         (if
-          (string? ss)
-          (print ss)
-          (print ss ": " (eval ss))))
-    exprs)
-  '(print "========="))
+
+(defmacro (syntax-list . xs)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+  (fold-right
+    (lambda (curr acc)
+      (cons 'cons (cons curr (cons acc '()))))
+    '()
+    xs))
+
+(define (list . xs) xs)
+
+(define (progn . xs)
+  (cons 'lambda (cons '() xs)))
+
+(define (print . xs)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+  (display
+    (fold-right
+      (lambda (curr acc)
+        (str-append (to-string curr) acc))
+      ""
+      xs)))
 
 (defmacro (cond . exprs)
   (define (fold-right op initial sequence)
     (if
+
       (nil? sequence)
       initial
       (op
@@ -23,6 +49,23 @@
                (cons 'if (cons predicate (cons consequent (cons acc '())))))
     '()
     exprs))
+
+(defmacro (dprint . exprs)
+  (define (map proc items)
+    (cond
+      ((nil? items) '())
+      (true
+        (cons (proc (car items))
+          (map proc (cdr items))))))
+  (define separator "=========")
+
+  (cons 'progn
+    (map (lambda (x)
+          (if (string? x)
+            (syntax-list 'print x)
+            (syntax-list 'print (to-string x) " = " (syntax-list 'to-string x))))
+      (cons "===dprint===" exprs))))
+
 (define (null? x) (nil? x))
 
 (define (not x)
@@ -76,9 +119,15 @@
       (filter predicate (cdr sequence)))))
 
 (defmacro (assert a b)
-  '(if '(= a b)
-    'null
-    '(print "assertion failed, found: " a ", but expected: " a " (" 'a " != " 'b ")")))
+  (syntax-list 'if (syntax-list '= a b) '()
+    (syntax-list 'print "assertion failed, found: "
+      (syntax-list 'to-string a)
+      " but expected: "
+      (syntax-list 'to-string b)
+      ". "
+      (to-string a)
+      " != "
+      (to-string b))))
 
 (define (reverse x)
   (def reverse-iter

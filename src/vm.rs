@@ -19,6 +19,7 @@ pub enum VMInstruction {
     Call(usize),
     CallBuiltIn(String),
     Return,
+    Display,
     Constant(Expr),
     BuiltIn(String),
 }
@@ -41,6 +42,7 @@ pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
     pub envs: HashMap<String, Env>,
+    pub log: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -74,6 +76,14 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
     };
     callframe.ip += 1;
     match instruction {
+        VMInstruction::Display => {
+            if let Some(top) = vm.stack.pop() {
+                vm.log.push(top.to_string());
+                vm.stack.push(Expr::Nil);
+            } else {
+                return Err("no value to display on stack, compiler bug!".to_string());
+            }
+        }
         VMInstruction::PopStack => {
             vm.stack.pop();
         }
@@ -320,6 +330,7 @@ pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
         callframes: vec![],
         stack: vec![],
         envs: HashMap::from([("initial_env".to_string(), initial_env)]),
+        log: Vec::new(),
     }
 }
 
@@ -356,20 +367,20 @@ pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM
     Ok((vm, macros))
 }
 
-// just for tests
 #[allow(dead_code)]
-pub fn jit_run(input: String) -> Result<Expr, String> {
+pub fn jit_run_vm(input: String) -> Result<VM, String> {
     let prelude = get_prelude();
     let (mut vm, _) = match prelude.and_then(|env| prepare_vm(input, Some(env))) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
+    run(&mut vm, &get_globals()).map(|_| vm)
+}
 
-    match run(&mut vm, &get_globals()) {
-        Ok(e) => e,
-        Err(err) => return Result::Err(err),
-    };
-
+// just for tests
+#[allow(dead_code)]
+pub fn jit_run(input: String) -> Result<Expr, String> {
+    let vm = jit_run_vm(input)?;
     match vm.stack.first() {
         Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
         _ => Result::Err(format!(
@@ -750,5 +761,27 @@ fn compiled_test() {
             .to_string()
         ),
         Ok(Expr::Num(15.0),)
+    );
+
+    assert_eq!(
+        jit_run(
+            "
+            (str-append (str-append \"hello\" \" \") \"world\")
+            "
+            .to_string()
+        ),
+        Ok(Expr::String("hello world".to_string()),)
+    );
+
+    let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
+    assert_eq!(
+        jit_run(example_str.to_string()),
+        Ok(make_pairs_from_vec(vec![
+            Expr::Boolean(true),
+            Expr::Boolean(false),
+            Expr::Boolean(false),
+            Expr::Boolean(false),
+            Expr::Boolean(false)
+        ]))
     );
 }
