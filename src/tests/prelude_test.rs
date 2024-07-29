@@ -22,3 +22,20 @@ fn call_macro_defined_in_prelude() {
     let res = crate::vm::jit_run("(cond (false 2) (true 3))".to_string());
     assert_eq!(res, Ok(Expr::Num(3.0)));
 }
+
+#[test]
+fn assert_test() {
+    let res = crate::vm::jit_run_vm(
+        "
+        (assert (+ 1 1) 2)
+        (assert (+ 1 1) 3)
+        "
+        .to_string(),
+    )
+    .unwrap()
+    .log;
+    assert_eq!(
+        res,
+        vec!["assertion failed, found: 2 but expected: 3. (+ 1 1) != 3".to_string()]
+    );
+}

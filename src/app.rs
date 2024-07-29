@@ -68,6 +68,7 @@ pub fn app() -> Html {
         r#"(define a "stuff")
             (dprint 1 a "hello")"#
             .to_string(),
+        "(if 1 2 3 )".to_string(),
     ];
 
     let source_handle = use_state(|| fib.last().cloned().unwrap_or("not found".to_string()));

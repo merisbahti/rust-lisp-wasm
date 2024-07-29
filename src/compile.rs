@@ -275,7 +275,6 @@ fn make_define(
 fn make_if(
     expr: &Expr,
     chunk: &mut Chunk,
-
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     let (pred, consequent, alternate) = match expr {
@@ -290,33 +289,42 @@ fn make_if(
             ))
         }
     };
+
+    let mut pred_chunk = Chunk { code: vec![] };
+    compile_internal(pred, &mut pred_chunk, globals)?;
+
+    let mut alt_chunk = Chunk { code: vec![] };
+    compile_internal(alternate, &mut alt_chunk, globals)?;
+
     let mut cons_chunk = Chunk { code: vec![] };
     compile_internal(consequent, &mut cons_chunk, globals)?;
-    compile_internal(pred, chunk, globals)?;
-    chunk.code.push(VMInstruction::If(
-        cons_chunk.code.len() + 1,
-        // one extra return for consequent
-    ));
+
+    let end_ip = cons_chunk.code.len();
+
+    let cons_ip = 1 + 1 + alt_chunk.code.len();
+
+    chunk.code.extend_from_slice(&pred_chunk.code);
+
+    chunk.code.push(VMInstruction::CondJump(cons_ip));
+
+    chunk.code.extend_from_slice(&alt_chunk.code);
+
+    chunk
+        .code
+        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk.code.push(VMInstruction::CondJump(end_ip));
     chunk.code.extend_from_slice(&cons_chunk.code);
-    chunk.code.push(VMInstruction::Return);
-    compile_internal(alternate, chunk, globals)?;
     Ok(())
 }
 
 fn make_and(
     expr: &Expr,
     chunk: &mut Chunk,
-
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
-        otherwise => {
-            return Err(format!(
-                "if, expected pred, cons, alt but found: {:?}",
-                otherwise
-            ))
-        }
+        otherwise => return Err(format!("and, expected two args but found: {:?}", otherwise)),
     };
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(r, &mut r_chunk, globals)?;
@@ -338,12 +346,7 @@ fn make_or(
 ) -> Result<(), String> {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
-        otherwise => {
-            return Err(format!(
-                "if, expected pred, cons, alt but found: {:?}",
-                otherwise
-            ))
-        }
+        otherwise => return Err(format!("or, expected two args but found: {:?}", otherwise)),
     };
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(l, &mut r_chunk, globals)?;
@@ -595,6 +598,17 @@ fn lambda_compile_test() {
         }
     }
 
+    assert_eq!(
+        parse_and_compile("(if 1 2 3)").code,
+        vec![
+            VMInstruction::Constant(Expr::Num(1.0)),
+            VMInstruction::CondJump(3),
+            VMInstruction::Constant(Expr::Num(3.0)),
+            VMInstruction::Constant(Expr::Boolean(true)),
+            VMInstruction::CondJump(1),
+            VMInstruction::Constant(Expr::Num(2.0)),
+        ]
+    );
     assert_eq!(
         parse_and_compile("(lambda () 1)"),
         Chunk {

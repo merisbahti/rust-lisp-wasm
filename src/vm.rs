@@ -16,6 +16,7 @@ pub enum VMInstruction {
     Define(String),
     PopStack,
     If(usize),
+    CondJump(usize),
     Call(usize),
     CallBuiltIn(String),
     Return,
@@ -82,6 +83,18 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 vm.stack.push(Expr::Nil);
             } else {
                 return Err("no value to display on stack, compiler bug!".to_string());
+            }
+        }
+        VMInstruction::CondJump(instruction) => {
+            let pred = match vm.stack.pop() {
+                Some(pred) => pred,
+                found_vals => {
+                    return Err(format!("too few args for if on stack: {:?}", found_vals))
+                }
+            };
+            match pred {
+                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => (),
+                _ => callframe.ip += *instruction,
             }
         }
         VMInstruction::PopStack => {
