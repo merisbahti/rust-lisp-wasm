@@ -396,6 +396,13 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
     run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {:?}", err))?;
 
+    if !vm.log.is_empty() {
+        return Err(format!(
+            "logs were printed happend while evaluating prelude (failed assertions?): {:?}",
+            vm.log
+        ));
+    }
+
     match vm.envs.get("initial_env") {
         Some(env) => Ok(CompilerEnv {
             env: env.clone(),
