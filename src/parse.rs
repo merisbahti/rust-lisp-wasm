@@ -1,6 +1,11 @@
+use std::iter::Skip;
+
 use nom::bytes::complete::is_not;
+use nom::character::complete::multispace1;
+use nom::combinator::value;
 use nom::multi::many1;
 use nom::number::complete::double;
+use nom::sequence::pair;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -30,7 +35,7 @@ fn parse_string(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 
 fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
-        context("keyword", many1(is_not("\n\r )("))),
+        context("keyword", many1(is_not(";\n\r )("))),
         |char_vec| match char_vec.into_iter().collect() {
             str if str == "true" => Expr::Boolean(true),
             str if str == "false" => Expr::Boolean(false),
@@ -49,6 +54,12 @@ pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
     }
 }
 
+pub fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
+    value(
+        (), // Output is thrown away.
+        pair(char(';'), many0(is_not("\n\r"))),
+    )(i)
+}
 fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     map(
         context("list", delimited(char('('), many0(parse_expr), char(')'))),
@@ -77,25 +88,29 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 
 fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     delimited(
-        multispace0,
-        alt((
-            parse_quote,
-            parse_list,
-            parse_number,
-            parse_string,
-            parse_keyword,
-        )),
-        multispace0,
+        many0(comment),
+        delimited(
+            multispace0,
+            alt((
+                parse_quote,
+                parse_list,
+                parse_number,
+                parse_string,
+                parse_keyword,
+            )),
+            multispace0,
+        ),
+        many0(comment),
     )(i)
 }
 
 pub fn parse(i: &str) -> Result<Vec<Expr>, String> {
-    many0(delimited(multispace0, parse_expr, multispace0))(i)
-        .map_err(|e| format!("{e:?}"))
-        .and_then(|(remaining, exp)| match remaining {
+    many0(parse_expr)(i).map_err(|e| format!("{e:?}")).and_then(
+        |(remaining, exp)| match remaining {
             "" => Ok(exp),
             remainder => Err(format!("Unexpected end of input: {remainder}")),
-        })
+        },
+    )
 }
 
 #[test]
@@ -163,6 +178,48 @@ fn test_parse_quote() {
     });
 }
 
+#[test]
+fn test_parse_comment() {
+    let res = parse("abc ; stuff").unwrap();
+    assert_eq!(vec![Expr::Keyword("abc".to_string())], res);
+
+    let res = parse("(abc) ; stuff").unwrap();
+    assert_eq!(
+        vec![make_pair_from_vec(vec![Expr::Keyword("abc".to_string())])],
+        res
+    );
+
+    let res = parse(
+        "(abc ; comment
+        cba
+        ); stuff",
+    )
+    .unwrap();
+    assert_eq!(
+        vec![make_pair_from_vec(vec![
+            Expr::Keyword("abc".to_string()),
+            Expr::Keyword("cba".to_string())
+        ])],
+        res
+    );
+
+    let res = parse(
+        "(abc ; comment
+        cba (
+            hello ;abc
+        )
+        ); stuff",
+    )
+    .unwrap();
+    assert_eq!(
+        vec![make_pair_from_vec(vec![
+            Expr::Keyword("abc".to_string()),
+            Expr::Keyword("cba".to_string()),
+            make_pair_from_vec(vec![Expr::Keyword("hello".to_string()),]),
+        ])],
+        res
+    );
+}
 #[test]
 fn test_parse_lists() {
     fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
