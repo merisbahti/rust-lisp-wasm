@@ -1,7 +1,6 @@
-use std::iter::Skip;
-
 use nom::bytes::complete::is_not;
-use nom::character::complete::multispace1;
+use nom::character;
+use nom::character::complete::{multispace1, space0, space1};
 use nom::combinator::value;
 use nom::multi::many1;
 use nom::number::complete::double;
@@ -88,19 +87,15 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 
 fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     delimited(
-        many0(comment),
-        delimited(
-            multispace0,
-            alt((
-                parse_quote,
-                parse_list,
-                parse_number,
-                parse_string,
-                parse_keyword,
-            )),
-            multispace0,
-        ),
-        many0(comment),
+        many0(alt((comment, value((), multispace1)))),
+        alt((
+            parse_quote,
+            parse_list,
+            parse_number,
+            parse_string,
+            parse_keyword,
+        )),
+        many0(alt((comment, value((), multispace1)))),
     )(i)
 }
 
