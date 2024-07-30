@@ -77,6 +77,7 @@ pub fn app() -> Html {
 
     let source = (*source_handle).clone();
     fn prepare_with_prelude(src: String) -> Result<VM, String> {
+        return prepare_vm(src, None).map(|x| x.0);
         match get_prelude() {
             Ok(prelude) => prepare_vm(src, Some(prelude)).map(|x| x.0),
             Err(err) => Err(format!("Error when compiling prelude: {err}")),
