@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[test]
 fn test_sicp() {
     use crate::compile::get_globals;

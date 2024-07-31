@@ -1,6 +1,5 @@
 use nom::bytes::complete::is_not;
-use nom::character;
-use nom::character::complete::{multispace1, space0, space1};
+use nom::character::complete::multispace1;
 use nom::combinator::value;
 use nom::multi::many1;
 use nom::number::complete::double;
@@ -8,7 +7,7 @@ use nom::sequence::pair;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, multispace0},
+    character::complete::char,
     combinator::map,
     error::{context, VerboseError},
     multi::many0,

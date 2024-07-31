@@ -70,7 +70,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                     .into_iter()
                     .try_reduce::<Result<Expr, String>>(|acc, curr| {
                         match (acc.clone(), curr.clone()) {
-                            (Expr::Num(l), Expr::Num(r)) => return Ok(Expr::Num(l + r)),
+                            (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
                             _ => Err(format!("Expected numbers, found: {:?} and {:?}", acc, curr)),
                         }
                     })
@@ -406,7 +406,7 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
             if kw == "display" =>
         {
-            compile_internal(&displayee, chunk, globals)?;
+            compile_internal(displayee, chunk, globals)?;
             chunk.code.push(VMInstruction::Display);
         }
         Expr::Pair(box Expr::Keyword(kw), box otherwise) if kw == "display" => {
