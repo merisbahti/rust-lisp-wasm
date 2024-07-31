@@ -9,13 +9,7 @@ use crate::{
 pub enum BuiltIn {
     OneArg(fn(&Expr) -> Result<Expr, String>),
     TwoArg(fn(&Expr, &Expr) -> Result<Expr, String>),
-}
-
-pub fn builtin_arity(builtin: &BuiltIn) -> usize {
-    match builtin {
-        BuiltIn::OneArg(..) => 1,
-        BuiltIn::TwoArg(..) => 2,
-    }
+    Variadic(fn(&Vec<Expr>) -> Result<Expr, String>),
 }
 
 pub fn get_globals() -> HashMap<String, BuiltIn> {
@@ -414,24 +408,23 @@ pub fn compile_internal(
                 otherwise
             ))
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(builtin) = globals.get(kw) => {
-            let exprs = collect_exprs_from_body(r)?;
-            let arity = builtin_arity(builtin);
-            if exprs.len() != arity {
-                return Err(format!(
-                    "Expected {} arguments for {}, but found {}",
-                    arity,
-                    kw,
-                    exprs.len(),
-                ));
-            }
-            for expr in exprs {
-                compile_internal(&expr, chunk, globals)?;
-            }
-            chunk.code.push(VMInstruction::BuiltIn(kw.clone()));
-        }
         Expr::Pair(box l, box r) => {
             let exprs = collect_exprs_from_body(r)?;
+            if let Expr::Keyword(l) = l {
+                let global_arity = match globals.get(l) {
+                    Some(BuiltIn::OneArg(..)) => Some(1),
+                    Some(BuiltIn::TwoArg(..)) => Some(2),
+                    _ => None,
+                };
+                if global_arity.is_some_and(|arity| arity != exprs.len()) {
+                    return Err(format!(
+                        "Expected {} arguments for {}, but found {}",
+                        global_arity.unwrap(),
+                        l,
+                        exprs.len(),
+                    ));
+                }
+            }
             compile_internal(l, chunk, globals)?;
             for expr in exprs.iter() {
                 compile_internal(expr, chunk, globals)?;
@@ -504,9 +497,10 @@ fn test_simple_add_compilation() {
         initial_chunk,
         Chunk {
             code: vec![
+                VMInstruction::Lookup("+".to_string()),
                 VMInstruction::Constant(Expr::Num(1.0)),
                 VMInstruction::Constant(Expr::Num(2.0)),
-                VMInstruction::BuiltIn("+".to_string()),
+                VMInstruction::Call(2),
             ],
         }
     )
@@ -526,9 +520,10 @@ fn losta_compile() {
     assert_eq!(
         parse_and_compile("(+ 1 2)"),
         vec![
+            VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::Num(1.0)),
             VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::BuiltIn("+".to_string()),
+            VMInstruction::Call(2),
         ]
     );
     assert_eq!(
@@ -555,9 +550,10 @@ fn losta_compile() {
             VMInstruction::Lookup("get".to_string()),
             VMInstruction::Lookup("add".to_string()),
             VMInstruction::Call(1),
+            VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::Num(1.0)),
             VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::BuiltIn("+".to_string()),
+            VMInstruction::Call(2),
             VMInstruction::Constant(Expr::Num(3.0)),
             VMInstruction::Call(2),
         ]

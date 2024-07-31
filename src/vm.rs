@@ -23,7 +23,6 @@ pub enum VMInstruction {
     Return,
     Display,
     Constant(Expr),
-    BuiltIn(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -133,6 +132,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                     };
                     vm.stack.push(func(&first, &second)?);
                 }
+                BuiltIn::Variadic(func) => {}
             }
         }
         VMInstruction::MakeLambda => {
@@ -168,23 +168,24 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 name: String,
                 env_name: String,
                 envs: &HashMap<String, Env>,
+                globals: &HashMap<String, BuiltIn>,
             ) -> Option<Expr> {
                 let env = match envs.get(&env_name) {
                     Some(env) => env,
                     None => panic!("env not found for callframe!!!"),
                 };
-                let lookup = env.map.get(&name);
                 let parent = env.parent.clone();
-                match lookup {
-                    value @ Some(_) => value.cloned(),
-                    _ => match parent {
-                        Some(parent_name) => lookup_env(name, parent_name, envs),
+                env.map
+                    .get(&name)
+                    .cloned()
+                    .or_else(|| match parent {
+                        Some(parent_name) => lookup_env(name.clone(), parent_name, envs, globals),
                         None => None,
-                    },
-                }
+                    })
+                    .or_else(|| globals.get(&name).map(|_| Expr::Keyword(name.clone())))
             }
 
-            match lookup_env(name.to_string(), callframe.env.clone(), envs) {
+            match lookup_env(name.to_string(), callframe.env.clone(), envs, globals) {
                 Some(instructions) => {
                     vm.stack.push(instructions.clone());
                     return Ok(());
@@ -196,7 +197,34 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let stack_len = vm.stack.len();
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
-            let new_callframe = match first {
+            match first {
+                Some(Expr::Keyword(str)) if let Some(builtin) = globals.get(&str) => {
+                    match builtin {
+                        BuiltIn::OneArg(func) => {
+                            let top = match vm.stack.pop() {
+                                Some(top) => top,
+                                None => {
+                                    return Err("Expected item on stack, but found none".to_string())
+                                }
+                            };
+                            vm.stack.pop();
+                            vm.stack.push(func(&top)?);
+                        }
+                        BuiltIn::TwoArg(func) => {
+                            let (second, first) = match (vm.stack.pop(), vm.stack.pop()) {
+                                (Some(first), Some(second)) => (first, second),
+                                _ => {
+                                    return Err("Expected item on stack, but found none".to_string())
+                                }
+                            };
+                            vm.stack.pop();
+                            vm.stack.push(func(&first, &second)?);
+                        }
+                        BuiltIn::Variadic(..) => {
+                            todo!("variadic built-ins not implemeneted: {}", str)
+                        }
+                    }
+                }
                 Some(Expr::Lambda(chunk, vars, variadic, definition_env)) => {
                     let new_env_name = (envs.len() + 1).to_string();
                     let is_variadic = variadic.is_some();
@@ -242,11 +270,12 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                             // parent: None,
                         },
                     );
-                    Callframe {
+
+                    vm.callframes.push(Callframe {
                         ip: 0,
                         chunk: chunk.to_owned(),
                         env: new_env_name.to_string(),
-                    }
+                    });
                 }
                 found => {
                     return Err(format!(
@@ -255,8 +284,6 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                     ))
                 }
             };
-
-            vm.callframes.push(new_callframe);
         }
         VMInstruction::Return => {
             // remove fn from stack?
@@ -296,33 +323,6 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 _ => {}
             }
         }
-        VMInstruction::BuiltIn(str) if let Some(BuiltIn::OneArg(f)) = globals.get(str) => {
-            let value = match vm.stack.pop() {
-                Some(pred) => pred,
-                found_vals => {
-                    return Err(format!(
-                        "too few args for if on stack for ({:?}): {:?}",
-                        str, found_vals
-                    ))
-                }
-            };
-            vm.stack.push(f(&value)?);
-        }
-        VMInstruction::BuiltIn(str) if let Some(BuiltIn::TwoArg(f)) = globals.get(str) => {
-            let (top, bot) = match (vm.stack.pop(), vm.stack.pop()) {
-                (Some(bot), Some(top)) => (top, bot),
-                found_vals => {
-                    return Err(format!(
-                        "too few args for if on stack for ({:?}): {:?}",
-                        str, found_vals
-                    ))
-                }
-            };
-            vm.stack.push(f(&top, &bot)?);
-        }
-        VMInstruction::BuiltIn(name) => {
-            return Err(format!("unknown built-in: {name}"));
-        }
     }
     Ok(())
 }
@@ -330,9 +330,10 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 fn test_add() {
     let chunk = Chunk {
         code: vec![
+            VMInstruction::Constant(Expr::Keyword("+".to_string())),
             VMInstruction::Constant(Expr::Num(1.0)),
             VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::BuiltIn("+".to_string()),
+            VMInstruction::Call(2),
             VMInstruction::Return,
         ],
     };
