@@ -110,6 +110,8 @@ pub fn macro_expand_one(
 ) -> Result<Expr, String> {
     let argmacros = macros.clone();
     match expr {
+        expr @ Expr::Quote(_) => Ok(expr.clone()),
+        expr @ Expr::Pair(box Expr::Keyword(quote), _) if quote == "quote" => Ok(expr.clone()),
         Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = argmacros.get(kw) => {
             let expanded_body = macro_expand_one(r, macros)?;
             let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
@@ -124,10 +126,15 @@ pub fn macro_expand_one(
         Expr::Pair(
             box Expr::Keyword(macroexpand),
             box Expr::Pair(
-                box Expr::Quote(box Expr::Pair(box Expr::Keyword(kw), box r)),
+                box Expr::Pair(
+                    box Expr::Keyword(quote),
+                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), box r), box Expr::Nil),
+                ),
                 box Expr::Nil,
             ),
-        ) if let (Some(found_macro), "macroexpand") = (argmacros.get(kw), macroexpand.as_str()) => {
+        ) if let (Some(found_macro), "macroexpand", "quote") =
+            (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
+        {
             let expanded_body = macro_expand_one(r, macros)?;
             let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
                 format!(
@@ -140,8 +147,16 @@ pub fn macro_expand_one(
 
         Expr::Pair(
             box Expr::Keyword(macroexpand),
-            box Expr::Pair(box Expr::Quote(box Expr::Pair(box Expr::Keyword(kw), box _)), _),
-        ) if let (None, "macroexpand") = (argmacros.get(kw), macroexpand.as_str()) => {
+            box Expr::Pair(
+                box Expr::Pair(
+                    box Expr::Keyword(quote),
+                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), _), box Expr::Nil),
+                ),
+                box Expr::Nil,
+            ),
+        ) if let (None, "macroexpand", "quote") =
+            (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
+        {
             Err(format!("macro not found: {kw}"))
         }
         Expr::Pair(box Expr::Keyword(macroexpand), rest)
