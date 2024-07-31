@@ -70,19 +70,25 @@
     exprs))
 
 (defmacro (dprint . exprs)
-  (define (map proc items)
-    (cond
-      ((nil? items) '())
-      (true
-        (cons (proc (car items))
-          (map proc (cdr items))))))
+  (define (fold-right op initial sequence)
+    (if
+
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
   (define separator "=========")
 
   (cons 'progn
-    (map (lambda (x)
-          (if (string? x)
-            (syntax-list 'print x)
-            (syntax-list 'print (to-string x) " = " (syntax-list 'to-string x))))
+    (fold-right
+      (lambda (curr acc)
+        (cons
+          (if (string? curr)
+            (syntax-list 'print curr)
+            (syntax-list 'print (to-string curr) " = " (syntax-list 'to-string curr)))
+          acc))
+      '((print "========="))
       (cons "===dprint===" exprs))))
 
 (define (null? x) (nil? x))
