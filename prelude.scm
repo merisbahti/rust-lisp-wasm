@@ -122,7 +122,7 @@
                        (map cdr seqs))))))
   (accumulate
     (lambda (args acc)
-      (cons (eval (cons op args)) acc))
+      (cons (apply op args) acc))
     '()
     (c-args seqs)))
 

@@ -1,4 +1,7 @@
-use crate::{compile::MacroFn, macro_expand::macro_expand};
+use crate::{
+    compile::{collect_exprs_from_body, MacroFn},
+    macro_expand::macro_expand,
+};
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -15,6 +18,7 @@ pub enum VMInstruction {
     MakeLambda,
     Define(String),
     PopStack,
+    Apply,
     If(usize),
     CondJumpPop(usize),
     CondJump(usize),
@@ -110,6 +114,34 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
         }
         VMInstruction::PopStack => {
             vm.stack.pop();
+        }
+        VMInstruction::Apply => {
+            let definition_env = callframe.env.clone();
+            let (function_maybe, args_maybe) = match (vm.stack.pop(), vm.stack.pop()) {
+                (Some(args @ Expr::Pair(..)), Some(function_maybe)) => (function_maybe, args),
+                stuff => {
+                    return Err(format!(
+                        "apply: expected two args, fn and args, but found: {:?}",
+                        stuff
+                    ))
+                }
+            };
+            let args = collect_exprs_from_body(&args_maybe)
+                .map_err(|_| format!("Expected to apply, but found: {args_maybe}"))?;
+            let args_len = args.len();
+            let mut instructions: Vec<VMInstruction> = Vec::new();
+            instructions.push(VMInstruction::Constant(function_maybe));
+            for argument in args {
+                instructions.push(VMInstruction::Constant(argument));
+            }
+            instructions.push(VMInstruction::Call(args_len));
+            instructions.push(VMInstruction::Return);
+            vm.stack.push(Expr::Lambda(
+                Chunk { code: instructions },
+                vec![],
+                None,
+                definition_env,
+            ));
         }
         VMInstruction::MakeLambda => {
             let definition_env = callframe.env.clone();

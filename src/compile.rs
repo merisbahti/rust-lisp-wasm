@@ -411,6 +411,17 @@ pub fn compile_internal(
                 return Err(format!("quote expects 1 arg, but found: {:?}", exprs));
             }
         }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "apply" => {
+            let exprs = collect_exprs_from_body(r)?;
+            if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
+                compile_internal(function, chunk, globals)?;
+                compile_internal(args, chunk, globals)?;
+                chunk.code.push(VMInstruction::Apply);
+                chunk.code.push(VMInstruction::Call(0));
+            } else {
+                return Err(format!("apply expects 2 args, but found: {:?}", exprs));
+            }
+        }
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
             if kw == "display" =>
         {
