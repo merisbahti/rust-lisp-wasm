@@ -19,7 +19,6 @@ pub enum VMInstruction {
     CondJumpPop(usize),
     CondJump(usize),
     Call(usize),
-    CallBuiltIn(String),
     Return,
     Display,
     Constant(Expr),
@@ -111,29 +110,6 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
         }
         VMInstruction::PopStack => {
             vm.stack.pop();
-        }
-        VMInstruction::CallBuiltIn(builtin_name) => {
-            let builtin = match globals.get(builtin_name) {
-                Some(builtin_fn) => builtin_fn,
-                None => return Err(format!("no builtin named: {:?}", builtin_name)),
-            };
-            match builtin {
-                BuiltIn::OneArg(func) => {
-                    let top = match vm.stack.pop() {
-                        Some(top) => top,
-                        None => return Err("Expected item on stack, but found none".to_string()),
-                    };
-                    vm.stack.push(func(&top)?);
-                }
-                BuiltIn::TwoArg(func) => {
-                    let (first, second) = match (vm.stack.pop(), vm.stack.pop()) {
-                        (Some(first), Some(second)) => (first, second),
-                        _ => return Err("Expected item on stack, but found none".to_string()),
-                    };
-                    vm.stack.push(func(&first, &second)?);
-                }
-                BuiltIn::Variadic(func) => {}
-            }
         }
         VMInstruction::MakeLambda => {
             let definition_env = callframe.env.clone();
