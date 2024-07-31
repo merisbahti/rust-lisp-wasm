@@ -50,6 +50,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             }),
         ),
         (
+            "abs".to_string(),
+            BuiltIn::OneArg(|expr| match expr {
+                Expr::Num(nr) => Ok(Expr::Num(nr.abs())),
+                other => Err(format!("abs: expected num but found: {other}")),
+            }),
+        ),
+        (
             "function?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
                 Expr::Lambda(..) => Ok(Expr::Boolean(true)),
