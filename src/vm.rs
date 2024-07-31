@@ -232,8 +232,13 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                             vm.stack.pop();
                             vm.stack.push(func(&first, &second)?);
                         }
-                        BuiltIn::Variadic(..) => {
-                            todo!("variadic built-ins not implemeneted: {}", str)
+                        BuiltIn::Variadic(func) => {
+                            let args = vm
+                                .stack
+                                .drain(stack_len - arity..stack_len)
+                                .collect::<Vec<Expr>>();
+                            vm.stack.pop();
+                            vm.stack.push(func(&args)?)
                         }
                     }
                 }
@@ -827,7 +832,7 @@ fn compiled_test() {
 "
             .to_string()
         ),
-        Err("+, expected two args but found: 3".to_string())
+        Ok(Expr::Num(6.0))
     );
 
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;

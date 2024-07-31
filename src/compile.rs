@@ -65,9 +65,16 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         ),
         (
             "+".to_string(),
-            BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+            BuiltIn::Variadic(|args| {
+                (args.clone())
+                    .into_iter()
+                    .try_reduce::<Result<Expr, String>>(|acc, curr| {
+                        match (acc.clone(), curr.clone()) {
+                            (Expr::Num(l), Expr::Num(r)) => return Ok(Expr::Num(l + r)),
+                            _ => Err(format!("Expected numbers, found: {:?} and {:?}", acc, curr)),
+                        }
+                    })
+                    .map(|x| x.unwrap_or_else(|| Expr::Num(0.0)))
             }),
         ),
         (
@@ -527,8 +534,20 @@ fn losta_compile() {
         ]
     );
     assert_eq!(
-        crate::vm::prepare_vm("(+ 1 2 3)".to_string(), None).map(|x| x.0),
-        Err("Expected 2 arguments for +, but found 3".to_string())
+        crate::vm::prepare_vm("(+ 1 2 3)".to_string(), None).map(|x| x
+            .0
+            .callframes
+            .get(0)
+            .map(|x| x.chunk.code.clone())
+            .unwrap()),
+        Ok(vec![
+            VMInstruction::Lookup("+".to_string()),
+            VMInstruction::Constant(Expr::Num(1.0)),
+            VMInstruction::Constant(Expr::Num(2.0)),
+            VMInstruction::Constant(Expr::Num(3.0)),
+            VMInstruction::Call(3),
+            VMInstruction::Return,
+        ])
     );
 
     assert_eq!(
