@@ -403,6 +403,14 @@ pub fn compile_internal(
         Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
+        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "quote" => {
+            let exprs = collect_exprs_from_body(r)?;
+            if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
+                chunk.code.push(VMInstruction::Constant(arg.clone()))
+            } else {
+                return Err(format!("quote expects 1 arg, but found: {:?}", exprs));
+            }
+        }
         Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
             if kw == "display" =>
         {

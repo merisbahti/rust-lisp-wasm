@@ -5,6 +5,7 @@ fn test_sicp() {
     use crate::vm::VM;
     use crate::vm::{get_prelude, prepare_vm, CompilerEnv};
     use include_dir::include_dir;
+    use std::collections::HashMap;
     let dir = include_dir!("./sicp");
     let files = dir
         .files()

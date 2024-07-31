@@ -80,7 +80,12 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
                 )),
             ),
         ),
-        |exprs| Expr::Quote(Box::new(exprs)),
+        |exprs| {
+            Expr::Pair(
+                Box::new(Expr::Keyword("quote".to_string())),
+                Box::new(Expr::Pair(Box::new(exprs), Box::new(Expr::Nil))),
+            )
+        },
     )(i)
 }
 
@@ -154,21 +159,27 @@ fn test_parse_quote() {
         .unwrap();
 
     assert!(match res2 {
-        Expr::Quote(box Expr::Pair(
-            box Expr::Keyword(a),
-            box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
-        )) => a == *"a" && b == *"b",
+        Expr::Pair(
+            box Expr::Keyword(quote),
+            box Expr::Pair(
+                box Expr::Pair(
+                    box Expr::Keyword(a),
+                    box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
+                ),
+                box Expr::Nil,
+            ),
+        ) => a == *"a" && b == *"b" && quote == *"quote",
         _ => false,
     });
 
     let res3 = parse("'a").map(|x| x.first().cloned()).unwrap().unwrap();
 
     assert!(match res3 {
-        Expr::Quote(box rc) => match rc {
-            Expr::Keyword(kw) => kw == "a",
-            _ => panic!("found: {:?}", rc),
-        },
-        _ => panic!("found: {:?}", res3),
+        Expr::Pair(
+            box Expr::Keyword(quote),
+            box Expr::Pair(box Expr::Keyword(a), box Expr::Nil),
+        ) => a == *"a" && quote == *"quote",
+        _ => false,
     });
 }
 

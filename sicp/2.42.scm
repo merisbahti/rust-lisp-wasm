@@ -58,4 +58,4 @@
 
 (define empty-board '())
 
-(assert (length (queens 6)) 20)
+(assert (length (queens 5)) 10)

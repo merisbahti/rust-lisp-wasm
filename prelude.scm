@@ -187,19 +187,6 @@
     initial
     (op (car sequence)
       (accumulate op initial (cdr sequence)))))
-(define (map-n op . seqs)
-  (define (c-args seqs)
-    (cond
-      ((null? (car seqs)) '())
-      ((pair? seqs) (append
-                     (list (map car seqs))
-                     (c-args
-                       (map cdr seqs))))))
-  (accumulate
-    (lambda (args acc)
-      (cons (eval (cons op args)) acc))
-    '()
-    (c-args seqs)))
 
 (define (accumulate-n op init seqs)
   (if (null? (car seqs))
