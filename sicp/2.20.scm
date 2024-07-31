@@ -1,5 +1,5 @@
-(define (odd? x) (eq (% x 2) 1))
-(define (even? x) (eq (% x 2) 0))
+(define (odd? x) (= (% x 2) 1))
+(define (even? x) (= (% x 2) 0))
 (define (f y) (odd? y))
 (define parityyy 1)
 (define

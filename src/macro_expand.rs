@@ -120,6 +120,35 @@ pub fn macro_expand_one(
             })?;
             found_macro(&args)
         }
+
+        Expr::Pair(
+            box Expr::Keyword(macroexpand),
+            box Expr::Pair(
+                box Expr::Quote(box Expr::Pair(box Expr::Keyword(kw), box r)),
+                box Expr::Nil,
+            ),
+        ) if let (Some(found_macro), "macroexpand") = (argmacros.get(kw), macroexpand.as_str()) => {
+            let expanded_body = macro_expand_one(r, macros)?;
+            let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
+                format!(
+                    "Error when collecting kws for macro expansion, found: {}",
+                    r
+                )
+            })?;
+            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone())))
+        }
+
+        Expr::Pair(
+            box Expr::Keyword(macroexpand),
+            box Expr::Pair(box Expr::Quote(box Expr::Pair(box Expr::Keyword(kw), box _)), _),
+        ) if let (None, "macroexpand") = (argmacros.get(kw), macroexpand.as_str()) => {
+            Err(format!("macro not found: {kw}"))
+        }
+        Expr::Pair(box Expr::Keyword(macroexpand), rest)
+            if let "macroexpand" = (macroexpand.as_str()) =>
+        {
+            Err(format!("can't call macroexpand on {rest}"))
+        }
         pair @ Expr::Pair(_, _) => {
             let exprs = collect_exprs_from_body(pair)?;
             let expanded_exprs = exprs

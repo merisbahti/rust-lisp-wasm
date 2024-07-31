@@ -1,5 +1,9 @@
+use std::collections::HashMap;
+
 #[test]
 fn test_sicp() {
+    use crate::compile::get_globals;
+    use crate::vm::run;
     use crate::vm::VM;
     use crate::vm::{get_prelude, prepare_vm, CompilerEnv};
     use include_dir::include_dir;
@@ -46,5 +50,19 @@ fn test_sicp() {
             .collect::<Vec<(&str, &str)>>()
             .len(),
         34
-    )
+    );
+
+    let expected_logs = HashMap::from([(
+        "2.23.scm",
+        Ok::<Vec<String>, String>(vec!["57".to_string(), "321".to_string(), "88".to_string()]),
+    )]);
+
+    for (file, mut vm) in successful_files {
+        let result = run(&mut vm, &get_globals()).map(|_| vm);
+        let result_log = &result.map(|x| x.log);
+        assert!(
+            result_log == expected_logs.get(file).unwrap_or(&Ok(vec![])),
+            "File: {file} failed when running sicp sols, found: {result_log:?}."
+        )
+    }
 }

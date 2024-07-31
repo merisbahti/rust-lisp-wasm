@@ -6,7 +6,7 @@
 (define (square x) (* x x))
 (define (tree-map f tree)
   (map
-    (fn (sub-tree)
+    (lambda (sub-tree)
       (if
         (pair? sub-tree)
         (tree-map f sub-tree)

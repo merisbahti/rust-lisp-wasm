@@ -13,6 +13,25 @@
       (cons 'cons (cons curr (cons acc '()))))
     '()
     xs))
+(defmacro (let definitions body)
+  (define (fold-right op initial sequence)
+    (if
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+
+  (define deflist (fold-right
+                   (lambda (curr acc)
+                     (define definee (car curr))
+                     (define expr (car (cdr curr)))
+                     (cons
+                       (cons 'define (cons definee (cons expr '())))
+                       acc))
+                   (cons body '())
+                   definitions))
+  (cons (cons 'lambda (cons '() deflist)) '()))
 
 (define (list . xs) xs)
 

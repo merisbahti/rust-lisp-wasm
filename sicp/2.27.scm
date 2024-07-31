@@ -13,9 +13,9 @@
     (cond
       ((null? x) acc)
       ((pair? (car x))
-        (progn
-          (define reversed (deep-reverse (car x)))
-          (deep-reverse-iter (cdr x) (cons reversed acc))))
+        ((lambda ()
+            (define reversed (deep-reverse (car x)))
+            (deep-reverse-iter (cdr x) (cons reversed acc)))))
       (else (deep-reverse-iter (cdr x) (cons (car x) acc)))))
   (deep-reverse-iter x '()))
 

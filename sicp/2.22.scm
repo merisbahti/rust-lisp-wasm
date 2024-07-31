@@ -22,4 +22,4 @@
 
 ;; it still puts things in the wrong order, but now the list is in the 'head' position
 
-(assert (square-list '(1 2 3 4 5)) (cons (cons (cons (cons (cons null 1) 4) 9) 16) 25))
+(assert (square-list '(1 2 3 4 5)) (cons (cons (cons (cons (cons '() 1) 4) 9) 16) 25))

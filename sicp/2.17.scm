@@ -1,5 +1,5 @@
-(def last-pair
-  (fn (xs)
+(define last-pair
+  (lambda (xs)
     (cond
       ((not (null? (cdr xs))) (last-pair (cdr xs)))
       (true xs))))

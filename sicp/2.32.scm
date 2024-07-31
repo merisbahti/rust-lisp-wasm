@@ -5,9 +5,10 @@
 ;; Complete the following definition of a procedure that generates the set of subsets of a set and give a clear explanation of why it works:
 
 (define (subsets s)
-  (if (null? s)
+  (if (nil? s)
     (list nil)
-    (let ((rest (subsets (cdr s))))
+    (let
+      ((rest (subsets (cdr s))))
       (append rest
         (map (lambda (x) (cons (car s) x)) rest)))))
 
