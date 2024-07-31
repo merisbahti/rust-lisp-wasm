@@ -807,6 +807,17 @@ fn compiled_test() {
         Ok(Expr::String("hello world".to_string()),)
     );
 
+    assert_eq!(
+        jit_run(
+            "
+            (define add +)
+            (add 1 2 3)
+"
+            .to_string()
+        ),
+        Ok(Expr::String("hello world".to_string()),)
+    );
+
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
     assert_eq!(
         jit_run(example_str.to_string()),
