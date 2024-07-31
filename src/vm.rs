@@ -201,6 +201,12 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 Some(Expr::Keyword(str)) if let Some(builtin) = globals.get(&str) => {
                     match builtin {
                         BuiltIn::OneArg(func) => {
+                            if *arity != 1 {
+                                return Err(format!(
+                                    "{}, expected one arg but found: {}",
+                                    str, arity
+                                ));
+                            }
                             let top = match vm.stack.pop() {
                                 Some(top) => top,
                                 None => {
@@ -211,6 +217,12 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                             vm.stack.push(func(&top)?);
                         }
                         BuiltIn::TwoArg(func) => {
+                            if *arity != 2 {
+                                return Err(format!(
+                                    "{}, expected two args but found: {}",
+                                    str, arity
+                                ));
+                            }
                             let (second, first) = match (vm.stack.pop(), vm.stack.pop()) {
                                 (Some(first), Some(second)) => (first, second),
                                 _ => {
@@ -815,7 +827,7 @@ fn compiled_test() {
 "
             .to_string()
         ),
-        Ok(Expr::String("hello world".to_string()),)
+        Err("+, expected two args but found: 3".to_string())
     );
 
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
