@@ -143,7 +143,7 @@ fn gc_test() {
     assert_eq!(vm.callframes.len(), 33);
     assert_eq!(callframe_envs.len(), 33);
     assert_eq!(parent_env_refs.len(), 3270);
-    assert_eq!(expr_refs_in_envs.len(), 703);
+    assert_eq!(expr_refs_in_envs.len(), 704);
     assert_eq!(lambda_refs.len(), 0);
     assert_eq!(cycles_left, 0);
     assert_eq!(3271, vm.envs.len());
