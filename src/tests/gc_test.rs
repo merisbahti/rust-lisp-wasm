@@ -147,5 +147,4 @@ fn gc_test() {
     assert_eq!(lambda_refs.len(), 0);
     assert_eq!(cycles_left, 0);
     assert_eq!(3271, vm.envs.len());
-    assert_eq!(true, false);
 }
