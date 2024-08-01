@@ -53,17 +53,14 @@ impl Display for Expr {
             Expr::Keyword(x) => write!(formatter, "{x}"),
             Expr::Boolean(x) => write!(formatter, "{x:?}"),
             Expr::Quote(xs) => write!(formatter, "'{xs:?}"),
-            Expr::Lambda(xs, vars, variadic, env) => {
-                write!(formatter, "Lambda({xs:?}, {vars:?}, {variadic:?}, {env:?})")
+            Expr::Lambda(..) => {
+                write!(formatter, "Lambda(...)")
             }
             Expr::String(s) => {
                 write!(formatter, "{s}")
             }
-            Expr::LambdaDefinition(xs, variadic, vars) => {
-                write!(
-                    formatter,
-                    "LambdaDefinition({xs:?}, {variadic:?}, {vars:?})"
-                )
+            Expr::LambdaDefinition(..) => {
+                write!(formatter, "LambdaDefinition(...)")
             }
         }
     }
