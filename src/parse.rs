@@ -1,3 +1,4 @@
+use crate::expr::Expr;
 use nom::bytes::complete::is_not;
 use nom::character::complete::multispace1;
 use nom::combinator::value;
@@ -6,40 +7,43 @@ use nom::number::complete::double;
 use nom::sequence::pair;
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     character::complete::char,
     combinator::map,
-    error::{context, VerboseError},
+    error::VerboseError,
     multi::many0,
     sequence::{delimited, preceded},
     IResult,
 };
+use nom_locate;
+use std::str;
+type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
-use crate::expr::Expr;
-
-fn parse_number(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(context("number", double), Expr::Num)(i)
+fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    map(double, Expr::Num)(i)
 }
 
-fn parse_string(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
+fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     map(
-        context(
-            "string",
-            delimited(char('"'), many0(is_not("\"")), char('"')),
-        ),
-        |char_vec| Expr::String(char_vec.into_iter().collect()),
+        delimited(char('"'), many0(is_not("\"")), char('"')),
+        |char_vec| {
+            let stuff = char_vec
+                .into_iter()
+                .map(|x: Span| *x.fragment())
+                .collect::<String>();
+
+            Expr::String(stuff)
+        },
     )(i)
 }
 
-fn parse_keyword(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    map(
-        context("keyword", many1(is_not(";\n\r )("))),
-        |char_vec| match char_vec.into_iter().collect() {
+fn parse_keyword(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    map(many1(is_not(";\n\r )(")), |char_vec| {
+        match char_vec.into_iter().map(|x: Span| *x.fragment()).collect() {
             str if str == "true" => Expr::Boolean(true),
             str if str == "false" => Expr::Boolean(false),
             str => Expr::Keyword(str),
-        },
-    )(i)
+        }
+    })(i)
 }
 
 pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
@@ -52,33 +56,30 @@ pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
     }
 }
 
-pub fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
+pub fn comment(i: Span) -> IResult<Span, (), VerboseError<Span>> {
     value(
         (), // Output is thrown away.
         pair(char(';'), many0(is_not("\n\r"))),
     )(i)
 }
-fn parse_list(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
+fn parse_list(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     map(
-        context("list", delimited(char('('), many0(parse_expr), char(')'))),
+        delimited(char('('), many0(parse_expr), char(')')),
         make_pair_from_vec,
     )(i)
 }
 
-fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
+fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     map(
-        context(
-            "quote",
-            preceded(
-                tag("'"),
-                alt((
-                    parse_quote,
-                    parse_list,
-                    parse_number,
-                    parse_string,
-                    parse_keyword,
-                )),
-            ),
+        preceded(
+            char('\''),
+            alt((
+                parse_quote,
+                parse_list,
+                parse_number,
+                parse_string,
+                parse_keyword,
+            )),
         ),
         |exprs| {
             Expr::Pair(
@@ -89,7 +90,7 @@ fn parse_quote(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     )(i)
 }
 
-fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
+fn parse_expr(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     delimited(
         many0(alt((comment, value((), multispace1)))),
         alt((
@@ -104,12 +105,12 @@ fn parse_expr(i: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 }
 
 pub fn parse(i: &str) -> Result<Vec<Expr>, String> {
-    many0(parse_expr)(i).map_err(|e| format!("{e:?}")).and_then(
-        |(remaining, exp)| match remaining {
+    many0(parse_expr)(Span::new(i))
+        .map_err(|e| format!("{e:?}"))
+        .and_then(|(remaining, exp)| match *remaining.fragment() {
             "" => Ok(exp),
             remainder => Err(format!("Unexpected end of input: {remainder}")),
-        },
-    )
+        })
 }
 
 #[test]
