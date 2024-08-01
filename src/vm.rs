@@ -829,7 +829,7 @@ fn compiled_test() {
             "
             .to_string()
         ),
-        Ok(Expr::String("hello world".to_string()),)
+        Ok(Expr::String("hello world".to_string(), None),)
     );
 
     assert_eq!(

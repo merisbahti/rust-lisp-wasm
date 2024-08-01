@@ -1,3 +1,4 @@
+use crate::parse::SrcLoc;
 use crate::vm::Chunk;
 use core::fmt::Debug;
 use core::fmt::Display;
@@ -12,7 +13,7 @@ pub enum Expr {
     Num(f64),
     Keyword(String),
     Boolean(bool),
-    String(String),
+    String(String, Option<SrcLoc>),
     Quote(Box<Expr>),
     Lambda(
         Chunk,
@@ -56,8 +57,8 @@ impl Display for Expr {
             Expr::Lambda(..) => {
                 write!(formatter, "Lambda(...)")
             }
-            Expr::String(s) => {
-                write!(formatter, "{s}")
+            Expr::String(s, srcpos) => {
+                write!(formatter, "{s} ({srcpos:?})")
             }
             Expr::LambdaDefinition(..) => {
                 write!(formatter, "LambdaDefinition(...)")
@@ -96,7 +97,7 @@ impl PartialEq for Expr {
         match (self, rhs) {
             (Expr::Pair(ax, ay), Expr::Pair(bx, by)) => ax == bx && ay == by,
             (Expr::Num(l), Expr::Num(r)) if l == r => true,
-            (Expr::String(l), Expr::String(r)) if l == r => true,
+            (Expr::String(l, _), Expr::String(r, _)) if l == r => true,
             (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,

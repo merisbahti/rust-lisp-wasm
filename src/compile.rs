@@ -165,13 +165,13 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         (
             "str-append".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::String(l), Expr::String(r)) => Ok(Expr::String(l.clone() + r)),
+                (Expr::String(l, _), Expr::String(r, _)) => Ok(Expr::String(l.clone() + r, None)),
                 _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "to-string".to_string(),
-            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string()))),
+            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string(), None))),
         ),
     ])
 }
@@ -464,27 +464,15 @@ pub fn compile_internal(
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
-        Expr::Num(nr) => {
-            chunk.code.push(VMInstruction::Constant(Expr::Num(*nr)));
-        }
-        Expr::String(str) => {
-            chunk
-                .code
-                .push(VMInstruction::Constant(Expr::String(str.clone())));
-        }
-        Expr::Boolean(bool) => {
-            chunk
-                .code
-                .push(VMInstruction::Constant(Expr::Boolean(*bool)));
-        }
         Expr::Keyword(kw) => {
             chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
-        Expr::Quote(box expr) => {
-            chunk.code.push(VMInstruction::Constant(expr.clone()));
-        }
-        Expr::Nil => {
-            chunk.code.push(VMInstruction::Constant(Expr::Nil));
+        expr @ (Expr::String(..)
+        | Expr::Num(..)
+        | Expr::Boolean(..)
+        | Expr::Quote(..)
+        | Expr::Nil) => {
+            chunk.code.push(VMInstruction::Constant((*expr).clone()));
         }
     };
     Ok(())

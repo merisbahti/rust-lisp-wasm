@@ -14,24 +14,36 @@ use nom::{
     sequence::{delimited, preceded},
     IResult,
 };
-use nom_locate;
+use nom_locate::{self, position};
+use serde::{Deserialize, Serialize};
 use std::str;
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SrcLoc {
+    line: u32,
+    offset: usize,
+}
 
 fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     map(double, Expr::Num)(i)
 }
 
 fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let src_loc = SrcLoc {
+        line: pos.location_line(),
+        offset: pos.location_offset(),
+    };
     map(
         delimited(char('"'), many0(is_not("\"")), char('"')),
-        |char_vec| {
+        move |char_vec| {
             let stuff = char_vec
                 .into_iter()
                 .map(|x: Span| *x.fragment())
                 .collect::<String>();
 
-            Expr::String(stuff)
+            Expr::String(stuff, Some(src_loc.clone()))
         },
     )(i)
 }
@@ -126,13 +138,13 @@ fn test_parse_alphanumerics() {
     assert_eq!(parse("false"), Ok(vec![Expr::Boolean(false)]));
     assert_eq!(
         parse("\"hello world\""),
-        Ok(vec![Expr::String("hello world".to_string())])
+        Ok(vec![Expr::String("hello world".to_string(), None)])
     );
     assert_eq!(
         parse("(\"hello 1\" \"hello 2\" )"),
         Ok(vec![make_pair_from_vec(vec![
-            Expr::String("hello 1".to_string()),
-            Expr::String("hello 2".to_string()),
+            Expr::String("hello 1".to_string(), None),
+            Expr::String("hello 2".to_string(), None),
         ])])
     );
     assert_eq!(parse("+"), kw("+"));
