@@ -11,7 +11,7 @@ use serde::Serialize;
 pub enum Expr {
     Pair(Box<Expr>, Box<Expr>, Option<SrcLoc>),
     Num(f64),
-    Keyword(String),
+    Keyword(String, Option<SrcLoc>),
     Boolean(bool),
     String(String, Option<SrcLoc>),
     Quote(Box<Expr>, Option<SrcLoc>),
@@ -51,7 +51,7 @@ impl Display for Expr {
                     write!(formatter, "{:#?}", x)
                 }
             }
-            Expr::Keyword(x) => write!(formatter, "{x}"),
+            Expr::Keyword(x, ..) => write!(formatter, "{x}"),
             Expr::Boolean(x) => write!(formatter, "{x:?}"),
             Expr::Quote(xs, _) => write!(formatter, "'{xs:?}"),
             Expr::Lambda(..) => {
@@ -81,7 +81,7 @@ fn test_display() {
     let list_with_values = crate::parse::make_pair_from_vec(vec![
         Expr::Boolean(false),
         Expr::Num(5.0),
-        crate::parse::make_pair_from_vec(vec![Expr::Keyword("hello".to_string())]),
+        crate::parse::make_pair_from_vec(vec![Expr::Keyword("hello".to_string(), None)]),
     ]);
     assert_eq!(format!("{list_with_values}"), "(false 5 (hello))");
 }
@@ -98,7 +98,7 @@ impl PartialEq for Expr {
             (Expr::Pair(ax, ay, ..), Expr::Pair(bx, by, ..)) => ax == bx && ay == by,
             (Expr::Num(l), Expr::Num(r)) if l == r => true,
             (Expr::String(l, _), Expr::String(r, _)) if l == r => true,
-            (Expr::Keyword(l), Expr::Keyword(r)) if l == r => true,
+            (Expr::Keyword(l, ..), Expr::Keyword(r, ..)) if l == r => true,
             (Expr::Boolean(l), Expr::Boolean(r)) if l == r => true,
             (Expr::Nil, Expr::Nil) => true,
             (Expr::Lambda(c1, s1, variadic1, d1), Expr::Lambda(c2, s2, variadic2, d2)) => {

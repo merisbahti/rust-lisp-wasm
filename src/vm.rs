@@ -191,7 +191,11 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                         Some(parent_name) => lookup_env(name.clone(), parent_name, envs, globals),
                         None => None,
                     })
-                    .or_else(|| globals.get(&name).map(|_| Expr::Keyword(name.clone())))
+                    .or_else(|| {
+                        globals
+                            .get(&name)
+                            .map(|_| Expr::Keyword(name.clone(), None))
+                    })
             }
 
             match lookup_env(name.to_string(), callframe.env.clone(), envs, globals) {
@@ -207,7 +211,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             match first {
-                Some(Expr::Keyword(str)) if let Some(builtin) = globals.get(&str) => {
+                Some(Expr::Keyword(str, ..)) if let Some(builtin) = globals.get(&str) => {
                     match builtin {
                         BuiltIn::OneArg(func) => {
                             if *arity != 1 {
@@ -356,7 +360,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 fn test_add() {
     let chunk = Chunk {
         code: vec![
-            VMInstruction::Constant(Expr::Keyword("+".to_string())),
+            VMInstruction::Constant(Expr::Keyword("+".to_string(), None)),
             VMInstruction::Constant(Expr::Num(1.0)),
             VMInstruction::Constant(Expr::Num(2.0)),
             VMInstruction::Call(2),

@@ -2,7 +2,6 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 
 use crate::{
     expr::Expr,
-    parse::make_pair_from_vec,
     vm::{Chunk, VMInstruction},
 };
 
@@ -178,7 +177,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
 
 pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     match expr {
-        Expr::Pair(box Expr::Keyword(kw), box rest, ..) => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box rest, ..) => {
             collect_kws_from_expr(rest).map(|mut x| {
                 x.insert(0, kw.clone());
                 x
@@ -264,7 +263,7 @@ fn make_define(
 ) -> Result<(), String> {
     let kw = match expr {
         Expr::Pair(
-            box Expr::Pair(box Expr::Keyword(fn_name), fn_args, ..),
+            box Expr::Pair(box Expr::Keyword(fn_name, ..), fn_args, ..),
             body @ box Expr::Pair(..),
             src_loc,
         ) => {
@@ -277,7 +276,11 @@ fn make_define(
             )?;
             Ok(fn_name.clone())
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil, ..), ..) => {
+        Expr::Pair(
+            box Expr::Keyword(kw, ..),
+            box Expr::Pair(box definee, box Expr::Nil, ..),
+            ..,
+        ) => {
             compile_internal(definee, chunk, globals)?;
             Ok(kw.clone())
         }
@@ -393,22 +396,22 @@ pub fn compile_internal(
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {:?}", expr)
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "lambda" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "lambda" => {
             make_lambda(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "define" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "define" => {
             make_define(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "if" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "if" => {
             make_if(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "and" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "and" => {
             make_and(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "or" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "quote" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "quote" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
                 chunk.code.push(VMInstruction::Constant(arg.clone()))
@@ -416,7 +419,7 @@ pub fn compile_internal(
                 return Err(format!("quote expects 1 arg, but found: {:?}", exprs));
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "apply" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "apply" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
                 compile_internal(function, chunk, globals)?;
@@ -427,13 +430,15 @@ pub fn compile_internal(
                 return Err(format!("apply expects 2 args, but found: {:?}", exprs));
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil, ..), ..)
-            if kw == "display" =>
-        {
+        Expr::Pair(
+            box Expr::Keyword(kw, ..),
+            box Expr::Pair(box displayee, box Expr::Nil, ..),
+            ..,
+        ) if kw == "display" => {
             compile_internal(displayee, chunk, globals)?;
             chunk.code.push(VMInstruction::Display);
         }
-        Expr::Pair(box Expr::Keyword(kw), box otherwise, ..) if kw == "display" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box otherwise, ..) if kw == "display" => {
             return Err(format!(
                 "Expected one argument for display, but found {}",
                 otherwise
@@ -441,7 +446,7 @@ pub fn compile_internal(
         }
         Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
-            if let Expr::Keyword(l) = l {
+            if let Expr::Keyword(l, ..) = l {
                 let global_arity = match globals.get(l) {
                     Some(BuiltIn::OneArg(..)) => Some(1),
                     Some(BuiltIn::TwoArg(..)) => Some(2),
@@ -462,7 +467,7 @@ pub fn compile_internal(
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
-        Expr::Keyword(kw) => {
+        Expr::Keyword(kw, ..) => {
             chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
         expr @ (Expr::String(..)
@@ -502,7 +507,7 @@ fn test_simple_add_compilation() {
 
     match compile_internal(
         &crate::parse::make_pair_from_vec(vec![
-            Expr::Keyword("+".to_string()),
+            Expr::Keyword("+".to_string(), None),
             Expr::Num(1.0),
             Expr::Num(2.0),
         ]),

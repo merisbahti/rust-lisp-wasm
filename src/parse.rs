@@ -16,13 +16,20 @@ use nom::{
 };
 use nom_locate::{self, position};
 use serde::{Deserialize, Serialize};
-use std::{assert_matches, str};
+use std::fmt::Display;
+use std::str;
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SrcLoc {
     line: u32,
     offset: usize,
+}
+
+impl Display for SrcLoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "srcloc")
+    }
 }
 
 fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
@@ -49,11 +56,17 @@ fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 }
 
 fn parse_keyword(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
-    map(many1(is_not(";\n\r )(")), |char_vec| {
+    let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let src_loc = SrcLoc {
+        line: pos.location_line(),
+        offset: pos.location_offset(),
+    };
+
+    map(many1(is_not(";\n\r )(")), move |char_vec| {
         match char_vec.into_iter().map(|x: Span| *x.fragment()).collect() {
             str if str == "true" => Expr::Boolean(true),
             str if str == "false" => Expr::Boolean(false),
-            str => Expr::Keyword(str),
+            str => Expr::Keyword(str, Some(src_loc.clone())),
         }
     })(i)
 }
@@ -105,11 +118,20 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
         ),
         move |exprs| {
             Expr::Pair(
-                Box::new(Expr::Keyword("quote".to_string())),
+                Box::new(Expr::Keyword(
+                    "quote".to_string(),
+                    Some(SrcLoc {
+                        line: src_loc.line,
+                        offset: src_loc.offset + "(".len(),
+                    }),
+                )),
                 Box::new(Expr::Pair(
                     Box::new(exprs),
                     Box::new(Expr::Nil),
-                    Some((&src_loc).clone()),
+                    Some(SrcLoc {
+                        line: src_loc.line,
+                        offset: src_loc.offset + "(quote".len(),
+                    }),
                 )),
                 Some((&src_loc).clone()),
             )
@@ -143,7 +165,7 @@ pub fn parse(i: &str) -> Result<Vec<Expr>, String> {
 #[test]
 fn test_parse_alphanumerics() {
     fn kw(string: &str) -> Result<Vec<Expr>, String> {
-        Ok(vec![Expr::Keyword(string.to_string())])
+        Ok(vec![Expr::Keyword(string.to_string(), None)])
     }
     fn nr(nr: f64) -> Result<Vec<Expr>, String> {
         Ok(vec![Expr::Num(nr)])
@@ -189,43 +211,45 @@ fn test_parse_quote() {
         .unwrap()
         .unwrap();
 
-    assert!(match res2 {
+    assert_matches!(res2,
         Expr::Pair(
-            box Expr::Keyword(quote),
+            box Expr::Keyword(quote, ..),
             box Expr::Pair(
                 box Expr::Pair(
-                    box Expr::Keyword(a),
-                    box Expr::Pair(box Expr::Keyword(b), box Expr::Nil, ..),
+                    box Expr::Keyword(a,..),
+                    box Expr::Pair(box Expr::Keyword(b,..), box Expr::Nil, ..),
                     ..,
                 ),
                 box Expr::Nil,
                 ..,
             ),
             ..,
-        ) => a == *"a" && b == *"b" && quote == *"quote",
-        _ => false,
-    });
+        ) if  a == *"a" && b == *"b" && quote == *"quote",
+    );
 
     let res3 = parse("'a").map(|x| x.first().cloned()).unwrap().unwrap();
 
-    assert!(match res3 {
+    use std::assert_matches::assert_matches;
+    assert_matches!(res3,
         Expr::Pair(
-            box Expr::Keyword(quote),
-            box Expr::Pair(box Expr::Keyword(a), box Expr::Nil, ..),
+            box Expr::Keyword(quote, ..),
+            box Expr::Pair(box Expr::Keyword(a, ..), box Expr::Nil, ..),
             ..,
-        ) => a == *"a" && quote == *"quote",
-        _ => false,
-    });
+        ) if a == *"a" && quote == *"quote",
+    );
 }
 
 #[test]
 fn test_parse_comment() {
     let res = parse("abc ; stuff").unwrap();
-    assert_eq!(vec![Expr::Keyword("abc".to_string())], res);
+    assert_eq!(vec![Expr::Keyword("abc".to_string(), None)], res);
 
     let res = parse("(abc) ; stuff").unwrap();
     assert_eq!(
-        vec![make_pair_from_vec(vec![Expr::Keyword("abc".to_string())])],
+        vec![make_pair_from_vec(vec![Expr::Keyword(
+            "abc".to_string(),
+            None
+        )])],
         res
     );
 
@@ -237,8 +261,8 @@ fn test_parse_comment() {
     .unwrap();
     assert_eq!(
         vec![make_pair_from_vec(vec![
-            Expr::Keyword("abc".to_string()),
-            Expr::Keyword("cba".to_string())
+            Expr::Keyword("abc".to_string(), None),
+            Expr::Keyword("cba".to_string(), None)
         ])],
         res
     );
@@ -253,9 +277,9 @@ fn test_parse_comment() {
     .unwrap();
     assert_eq!(
         vec![make_pair_from_vec(vec![
-            Expr::Keyword("abc".to_string()),
-            Expr::Keyword("cba".to_string()),
-            make_pair_from_vec(vec![Expr::Keyword("hello".to_string()),]),
+            Expr::Keyword("abc".to_string(), None),
+            Expr::Keyword("cba".to_string(), None),
+            make_pair_from_vec(vec![Expr::Keyword("hello".to_string(), None),]),
         ])],
         res
     );
@@ -266,7 +290,7 @@ fn test_parse_lists() {
     fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
         let stuff: Vec<Expr> = strings
             .iter()
-            .map(|x| Expr::Keyword(x.to_string()))
+            .map(|x| Expr::Keyword(x.to_string(), None))
             .collect();
         Ok(vec![make_pair_from_vec(stuff)])
     }
@@ -278,22 +302,22 @@ fn test_parse_lists() {
     assert_eq!(
         parse("(     a         1       b          2      )"),
         Ok(vec![make_pair_from_vec(vec![
-            Expr::Keyword("a".to_string()),
+            Expr::Keyword("a".to_string(), None),
             Expr::Num(1.),
-            Expr::Keyword("b".to_string()),
+            Expr::Keyword("b".to_string(), None),
             Expr::Num(2.)
         ])])
     );
     assert_eq!(
         parse("(     a         (wat    woo    wii)       b          2      )"),
         Ok(vec![make_pair_from_vec(vec![
-            Expr::Keyword("a".to_string()),
+            Expr::Keyword("a".to_string(), None),
             make_pair_from_vec(vec!(
-                Expr::Keyword("wat".to_string()),
-                Expr::Keyword("woo".to_string()),
-                Expr::Keyword("wii".to_string())
+                Expr::Keyword("wat".to_string(), None),
+                Expr::Keyword("woo".to_string(), None),
+                Expr::Keyword("wii".to_string(), None)
             )),
-            Expr::Keyword("b".to_string()),
+            Expr::Keyword("b".to_string(), None),
             Expr::Num(2.)
         ])])
     );

@@ -109,8 +109,8 @@ pub fn macro_expand_one(
     let argmacros = macros.clone();
     match expr {
         expr @ Expr::Quote(..) => Ok(expr.clone()),
-        expr @ Expr::Pair(box Expr::Keyword(quote), ..) if quote == "quote" => Ok(expr.clone()),
-        Expr::Pair(box Expr::Keyword(kw), box r, _)
+        expr @ Expr::Pair(box Expr::Keyword(quote, ..), ..) if quote == "quote" => Ok(expr.clone()),
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, _)
             if let Some(found_macro) = argmacros.get(kw) =>
         {
             let expanded_body = macro_expand_one(r, macros)?;
@@ -124,12 +124,12 @@ pub fn macro_expand_one(
         }
 
         Expr::Pair(
-            box Expr::Keyword(macroexpand),
+            box Expr::Keyword(macroexpand, ..),
             box Expr::Pair(
                 box Expr::Pair(
-                    box Expr::Keyword(quote),
+                    box Expr::Keyword(quote, ..),
                     box Expr::Pair(
-                        box Expr::Pair(box Expr::Keyword(kw), box r, _),
+                        box Expr::Pair(box Expr::Keyword(kw, ..), box r, _),
                         box Expr::Nil,
                         _,
                     ),
@@ -153,11 +153,15 @@ pub fn macro_expand_one(
         }
 
         Expr::Pair(
-            box Expr::Keyword(macroexpand),
+            box Expr::Keyword(macroexpand, ..),
             box Expr::Pair(
                 box Expr::Pair(
-                    box Expr::Keyword(quote),
-                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), ..), box Expr::Nil, ..),
+                    box Expr::Keyword(quote, ..),
+                    box Expr::Pair(
+                        box Expr::Pair(box Expr::Keyword(kw, ..), ..),
+                        box Expr::Nil,
+                        ..,
+                    ),
                     ..,
                 ),
                 box Expr::Nil,
@@ -169,7 +173,7 @@ pub fn macro_expand_one(
         {
             Err(format!("macro not found: {kw}"))
         }
-        Expr::Pair(box Expr::Keyword(macroexpand), rest, ..)
+        Expr::Pair(box Expr::Keyword(macroexpand, ..), rest, ..)
             if let "macroexpand" = (macroexpand.as_str()) =>
         {
             Err(format!("can't call macroexpand on {rest}"))
@@ -194,9 +198,9 @@ pub fn macro_expand(
     for expr in exprs {
         match expr {
             Expr::Pair(
-                box Expr::Keyword(kw),
+                box Expr::Keyword(kw, ..),
                 box Expr::Pair(
-                    box Expr::Pair(box Expr::Keyword(macro_name), box args, ..),
+                    box Expr::Pair(box Expr::Keyword(macro_name, ..), box args, ..),
                     box macro_body,
                     ..,
                 ),
