@@ -16,7 +16,7 @@ use nom::{
 };
 use nom_locate::{self, position};
 use serde::{Deserialize, Serialize};
-use std::str;
+use std::{assert_matches, str};
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -63,6 +63,10 @@ pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
         Some((head, tail)) => Expr::Pair(
             Box::new(head.clone()),
             Box::new(make_pair_from_vec(tail.to_vec()).clone()),
+            Some(SrcLoc {
+                line: 13371337,
+                offset: 13371337,
+            }),
         ),
         None => Expr::Nil,
     }
@@ -82,6 +86,12 @@ fn parse_list(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 }
 
 fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let src_loc = SrcLoc {
+        line: pos.location_line(),
+        offset: pos.location_offset(),
+    };
+
     map(
         preceded(
             char('\''),
@@ -93,10 +103,15 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                 parse_keyword,
             )),
         ),
-        |exprs| {
+        move |exprs| {
             Expr::Pair(
                 Box::new(Expr::Keyword("quote".to_string())),
-                Box::new(Expr::Pair(Box::new(exprs), Box::new(Expr::Nil))),
+                Box::new(Expr::Pair(
+                    Box::new(exprs),
+                    Box::new(Expr::Nil),
+                    Some((&src_loc).clone()),
+                )),
+                Some((&src_loc).clone()),
             )
         },
     )(i)
@@ -164,7 +179,10 @@ fn test_parse_quote() {
     assert_eq!(res.as_ref().map(|x| x.len()), Ok(1));
 
     let borrowed = res.map(|x| x.first().cloned()).unwrap().unwrap();
-    matches!(borrowed, Expr::Quote(box Expr::Nil),);
+    matches!(
+        borrowed,
+        Expr::Quote(box Expr::Nil, Some(SrcLoc { line: 0, offset: 0 })),
+    );
 
     let res2 = parse("'(a b)")
         .map(|x| x.first().cloned())
@@ -177,10 +195,13 @@ fn test_parse_quote() {
             box Expr::Pair(
                 box Expr::Pair(
                     box Expr::Keyword(a),
-                    box Expr::Pair(box Expr::Keyword(b), box Expr::Nil),
+                    box Expr::Pair(box Expr::Keyword(b), box Expr::Nil, ..),
+                    ..,
                 ),
                 box Expr::Nil,
+                ..,
             ),
+            ..,
         ) => a == *"a" && b == *"b" && quote == *"quote",
         _ => false,
     });
@@ -190,7 +211,8 @@ fn test_parse_quote() {
     assert!(match res3 {
         Expr::Pair(
             box Expr::Keyword(quote),
-            box Expr::Pair(box Expr::Keyword(a), box Expr::Nil),
+            box Expr::Pair(box Expr::Keyword(a), box Expr::Nil, ..),
+            ..,
         ) => a == *"a" && quote == *"quote",
         _ => false,
     });
@@ -240,6 +262,7 @@ fn test_parse_comment() {
 }
 #[test]
 fn test_parse_lists() {
+    use std::assert_matches::assert_matches;
     fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
         let stuff: Vec<Expr> = strings
             .iter()
@@ -248,12 +271,9 @@ fn test_parse_lists() {
         Ok(vec![make_pair_from_vec(stuff)])
     }
     assert_eq!(parse("(a)"), ok_list(vec!(("a"))));
-    assert_eq!(
-        parse("(123)"),
-        Ok(vec![Expr::Pair(
-            Box::new(Expr::Num(123.)),
-            Box::new(Expr::Nil)
-        )])
+    assert_matches!(
+        parse("(123)").map(|x| x.split_first().map(|x| x.0.clone())),
+        Ok(Some(Expr::Pair(box Expr::Num(123.), box Expr::Nil, ..)))
     );
     assert_eq!(
         parse("(     a         1       b          2      )"),

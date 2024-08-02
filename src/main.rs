@@ -1,6 +1,7 @@
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)]
 #![feature(if_let_guard)]
+#![feature(assert_matches)]
 mod app;
 mod compile;
 mod expr;

@@ -146,7 +146,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         ),
         (
             "cons".to_string(),
-            BuiltIn::TwoArg(|l, r| Ok(Expr::Pair(Box::new(l.clone()), Box::new(r.clone())))),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::Pair(Box::new(l.clone()), Box::new(r.clone()), None))),
         ),
         (
             "car".to_string(),
@@ -158,7 +158,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         (
             "cdr".to_string(),
             BuiltIn::OneArg(|pair| match pair {
-                Expr::Pair(.., box r) => Ok(r.clone()),
+                Expr::Pair(_, box r, ..) => Ok(r.clone()),
                 _ => Err(format!("cdr expected pair, found: {:?}", pair)),
             }),
         ),
@@ -176,22 +176,14 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
     ])
 }
 
-pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
-    match exprs.split_first() {
-        Some((head, tail)) => Expr::Pair(
-            Box::new(head.clone()),
-            Box::new(make_pair_from_vec(tail.to_vec())),
-        ),
-        None => Expr::Nil,
-    }
-}
-
 pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
     match expr {
-        Expr::Pair(box Expr::Keyword(kw), box rest) => collect_kws_from_expr(rest).map(|mut x| {
-            x.insert(0, kw.clone());
-            x
-        }),
+        Expr::Pair(box Expr::Keyword(kw), box rest, ..) => {
+            collect_kws_from_expr(rest).map(|mut x| {
+                x.insert(0, kw.clone());
+                x
+            })
+        }
         Expr::Nil => Ok(vec![]),
         _ => Err(format!("Invalid keyword list: {:?}", expr)),
     }
@@ -200,8 +192,8 @@ pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
 pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
     match expr {
         Expr::Nil => Ok(vec![]),
-        Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
-        Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
+        Expr::Pair(box expr, box Expr::Nil, ..) => Ok(vec![expr.to_owned()]),
+        Expr::Pair(box expr, next @ box Expr::Pair(..), ..) => {
             collect_exprs_from_body(next).map(|mut x| {
                 x.insert(0, expr.to_owned());
                 x
@@ -219,8 +211,8 @@ fn make_lambda(
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     let (pairs, unextracted_body) = match expr {
-        Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
-        Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Pair(..), body @ box Expr::Pair(..), ..) => (pairs, body),
         otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
     };
 
@@ -272,15 +264,20 @@ fn make_define(
 ) -> Result<(), String> {
     let kw = match expr {
         Expr::Pair(
-            box Expr::Pair(box Expr::Keyword(fn_name), fn_args),
+            box Expr::Pair(box Expr::Keyword(fn_name), fn_args, ..),
             body @ box Expr::Pair(..),
+            src_loc,
         ) => {
             // this is a lambda definition
             // kws should contain a fn name and then its args
-            make_lambda(&Expr::Pair(fn_args.clone(), body.clone()), chunk, globals)?;
+            make_lambda(
+                &Expr::Pair(fn_args.clone(), body.clone(), src_loc.clone()),
+                chunk,
+                globals,
+            )?;
             Ok(fn_name.clone())
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
+        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil, ..), ..) => {
             compile_internal(definee, chunk, globals)?;
             Ok(kw.clone())
         }
@@ -302,7 +299,8 @@ fn make_if(
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
             box pred,
-            box Expr::Pair(box consequent, box Expr::Pair(box alternate, box Expr::Nil)),
+            box Expr::Pair(box consequent, box Expr::Pair(box alternate, box Expr::Nil, ..), ..),
+            ..,
         ) => (pred, consequent, alternate),
         otherwise => {
             return Err(format!(
@@ -345,7 +343,7 @@ fn make_and(
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     let (l, r) = match expr {
-        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
         otherwise => return Err(format!("and, expected two args but found: {:?}", otherwise)),
     };
     // l + popjmp(r) + jmp(return) + r + return
@@ -370,7 +368,7 @@ fn make_or(
     globals: &HashMap<String, BuiltIn>,
 ) -> Result<(), String> {
     let (l, r) = match expr {
-        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
         otherwise => return Err(format!("or, expected two args but found: {:?}", otherwise)),
     };
     let mut r_chunk = Chunk { code: vec![] };
@@ -395,22 +393,22 @@ pub fn compile_internal(
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {:?}", expr)
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "lambda" => {
             make_lambda(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "define" => {
             make_define(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "if" => {
             make_if(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "and" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "and" => {
             make_and(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "quote" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "quote" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
                 chunk.code.push(VMInstruction::Constant(arg.clone()))
@@ -418,7 +416,7 @@ pub fn compile_internal(
                 return Err(format!("quote expects 1 arg, but found: {:?}", exprs));
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "apply" => {
+        Expr::Pair(box Expr::Keyword(kw), box r, ..) if kw == "apply" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
                 compile_internal(function, chunk, globals)?;
@@ -429,19 +427,19 @@ pub fn compile_internal(
                 return Err(format!("apply expects 2 args, but found: {:?}", exprs));
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
+        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil, ..), ..)
             if kw == "display" =>
         {
             compile_internal(displayee, chunk, globals)?;
             chunk.code.push(VMInstruction::Display);
         }
-        Expr::Pair(box Expr::Keyword(kw), box otherwise) if kw == "display" => {
+        Expr::Pair(box Expr::Keyword(kw), box otherwise, ..) if kw == "display" => {
             return Err(format!(
                 "Expected one argument for display, but found {}",
                 otherwise
             ))
         }
-        Expr::Pair(box l, box r) => {
+        Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
             if let Expr::Keyword(l) = l {
                 let global_arity = match globals.get(l) {

@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 #[cfg(test)]
 use crate::{
     compile::get_globals,
@@ -83,7 +81,7 @@ fn gc_test() {
     let all_envs = vm.envs.clone().keys().collect::<Vec<&String>>();
     fn find_envs(expr: &Expr, vec: &mut Vec<String>) -> () {
         match expr {
-            Expr::Pair(l, r) => {
+            Expr::Pair(l, r, ..) => {
                 find_envs(l, vec);
                 find_envs(r, vec);
             }

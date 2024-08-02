@@ -1,13 +1,14 @@
 use crate::{
     compile::{collect_exprs_from_body, MacroFn},
     macro_expand::macro_expand,
+    parse::make_pair_from_vec,
 };
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    compile::{compile_many_exprs, get_globals, make_pairs_from_vec, BuiltIn},
+    compile::{compile_many_exprs, get_globals, BuiltIn},
     expr::Expr,
     parse,
 };
@@ -284,7 +285,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 
                     variadic.inspect(|arg_name| {
                         let (_, pairs) = args.split_at(vars.len());
-                        map.insert(arg_name.clone(), make_pairs_from_vec(pairs.to_vec()));
+                        map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
                     });
 
                     envs.insert(
@@ -846,7 +847,7 @@ fn compiled_test() {
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
     assert_eq!(
         jit_run(example_str.to_string()),
-        Ok(make_pairs_from_vec(vec![
+        Ok(make_pair_from_vec(vec![
             Expr::Boolean(true),
             Expr::Boolean(false),
             Expr::Boolean(false),

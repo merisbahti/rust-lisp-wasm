@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::compile::{collect_exprs_from_body, collect_kws_from_expr, compile_many_exprs};
+use crate::parse::make_pair_from_vec;
 use crate::vm::{run, Callframe};
 use crate::{
-    compile::{get_globals, make_pairs_from_vec, MacroFn},
+    compile::{get_globals, MacroFn},
     expr::Expr,
     vm::{get_initial_vm_and_chunk, Chunk, Env, VMInstruction},
 };
@@ -62,10 +63,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
 
             variadic.inspect(|arg_name| {
                 let (_, pairs) = args.split_at(vars.len());
-                map.insert(
-                    arg_name.clone().clone(),
-                    make_pairs_from_vec(pairs.to_vec()),
-                );
+                map.insert(arg_name.clone().clone(), make_pair_from_vec(pairs.to_vec()));
             });
 
             let initial_env = Env { map, parent: None };
@@ -110,9 +108,11 @@ pub fn macro_expand_one(
 ) -> Result<Expr, String> {
     let argmacros = macros.clone();
     match expr {
-        expr @ Expr::Quote(_) => Ok(expr.clone()),
-        expr @ Expr::Pair(box Expr::Keyword(quote), _) if quote == "quote" => Ok(expr.clone()),
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = argmacros.get(kw) => {
+        expr @ Expr::Quote(..) => Ok(expr.clone()),
+        expr @ Expr::Pair(box Expr::Keyword(quote), ..) if quote == "quote" => Ok(expr.clone()),
+        Expr::Pair(box Expr::Keyword(kw), box r, _)
+            if let Some(found_macro) = argmacros.get(kw) =>
+        {
             let expanded_body = macro_expand_one(r, macros)?;
             let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
                 format!(
@@ -128,10 +128,17 @@ pub fn macro_expand_one(
             box Expr::Pair(
                 box Expr::Pair(
                     box Expr::Keyword(quote),
-                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), box r), box Expr::Nil),
+                    box Expr::Pair(
+                        box Expr::Pair(box Expr::Keyword(kw), box r, _),
+                        box Expr::Nil,
+                        _,
+                    ),
+                    _,
                 ),
                 box Expr::Nil,
+                srcloc,
             ),
+            _,
         ) if let (Some(found_macro), "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
@@ -142,7 +149,7 @@ pub fn macro_expand_one(
                     r
                 )
             })?;
-            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone())))
+            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone()), srcloc.clone()))
         }
 
         Expr::Pair(
@@ -150,27 +157,30 @@ pub fn macro_expand_one(
             box Expr::Pair(
                 box Expr::Pair(
                     box Expr::Keyword(quote),
-                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), _), box Expr::Nil),
+                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), ..), box Expr::Nil, ..),
+                    ..,
                 ),
                 box Expr::Nil,
+                _,
             ),
+            _,
         ) if let (None, "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
             Err(format!("macro not found: {kw}"))
         }
-        Expr::Pair(box Expr::Keyword(macroexpand), rest)
+        Expr::Pair(box Expr::Keyword(macroexpand), rest, ..)
             if let "macroexpand" = (macroexpand.as_str()) =>
         {
             Err(format!("can't call macroexpand on {rest}"))
         }
-        pair @ Expr::Pair(_, _) => {
+        pair @ Expr::Pair(..) => {
             let exprs = collect_exprs_from_body(pair)?;
             let expanded_exprs = exprs
                 .into_iter()
                 .map(|expr| macro_expand_one(&expr, macros))
                 .collect::<Result<Vec<Expr>, String>>()?;
-            Ok(make_pairs_from_vec(expanded_exprs))
+            Ok(make_pair_from_vec(expanded_exprs))
         }
         otherwise => Ok(otherwise.clone()),
     }
@@ -186,9 +196,11 @@ pub fn macro_expand(
             Expr::Pair(
                 box Expr::Keyword(kw),
                 box Expr::Pair(
-                    box Expr::Pair(box Expr::Keyword(macro_name), box args),
+                    box Expr::Pair(box Expr::Keyword(macro_name), box args, ..),
                     box macro_body,
+                    ..,
                 ),
+                ..,
             ) if kw == "defmacro" => {
                 let args = collect_kws_from_expr(&args)
                     .map_err(|_| "Error when collecting kws for macro definition")?;
