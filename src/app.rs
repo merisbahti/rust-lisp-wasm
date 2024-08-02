@@ -76,21 +76,28 @@ pub fn app() -> Html {
     let source_handle = use_state(|| fib.last().cloned().unwrap_or("not found".to_string()));
 
     let source = (*source_handle).clone();
-    fn prepare_with_prelude(src: String) -> Result<VM, String> {
+    fn prepare_with_prelude(src: &str) -> Result<VM, String> {
         match get_prelude() {
-            Ok(prelude) => prepare_vm(src, Some(prelude)).map(|x| x.0),
+            Ok(prelude) => prepare_vm(
+                &crate::parse::ParseInput {
+                    source: src,
+                    file_name: Some("app"),
+                },
+                Some(prelude),
+            )
+            .map(|x| x.0),
             Err(err) => Err(format!("Error when compiling prelude: {err}")),
         }
     }
 
-    let vm_handle = use_state(|| prepare_with_prelude(source.clone()));
+    let vm_handle = use_state(|| prepare_with_prelude(source.as_str()));
     let vm = (*vm_handle).clone();
 
     use_effect_with_deps(
         {
             let vm_handle = vm_handle.clone();
             move |arg: &String| {
-                let prepared_vm = prepare_with_prelude(arg.clone());
+                let prepared_vm = prepare_with_prelude(arg.as_str());
 
                 vm_handle.set(prepared_vm)
             }
@@ -126,7 +133,7 @@ pub fn app() -> Html {
         let source = source.clone();
         let vm_handle = vm_handle.clone();
         move |_stuff: MouseEvent| {
-            let prepared_vm = prepare_with_prelude(source.clone());
+            let prepared_vm = prepare_with_prelude(source.as_str());
 
             let res = prepared_vm.and_then(|mut vm| {
                 run(&mut vm, &get_globals())?;

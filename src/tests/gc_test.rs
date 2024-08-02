@@ -74,7 +74,15 @@ fn gc_test() {
     let globals = &get_globals();
     let prelude = get_prelude();
     let (mut vm, _) = prelude
-        .and_then(|env| prepare_vm(src.to_string(), Some(env)))
+        .and_then(|env| {
+            prepare_vm(
+                &crate::parse::ParseInput {
+                    source: src,
+                    file_name: Some("gc_test"),
+                },
+                Some(env),
+            )
+        })
         .unwrap();
     let mut cycles_left = 100000 / 3;
 

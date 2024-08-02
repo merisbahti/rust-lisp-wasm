@@ -4,10 +4,8 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use core::fmt::Error;
 use nom::lib::std::fmt::Formatter;
-use serde::Deserialize;
-use serde::Serialize;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub enum Expr {
     Pair(Box<Expr>, Box<Expr>, Option<SrcLoc>),
     Num(f64),

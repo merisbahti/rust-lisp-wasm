@@ -1,3 +1,6 @@
+#[cfg(test)]
+use crate::parse::ParseInput;
+
 #[test]
 fn test_sicp() {
     use crate::compile::get_globals;
@@ -23,7 +26,10 @@ fn test_sicp() {
             (
                 filename,
                 prepare_vm(
-                    src.to_string(),
+                    &ParseInput {
+                        source: src,
+                        file_name: Some("test_sicp"),
+                    },
                     Some(CompilerEnv {
                         env: prelude.env.clone(),
                         macros: prelude.macros.clone(),

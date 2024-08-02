@@ -15,15 +15,15 @@ use nom::{
     IResult,
 };
 use nom_locate::{self, position};
-use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str;
-type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+type Span<'a> = nom_locate::LocatedSpan<&'a str, Option<&'a str>>;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug)]
 pub struct SrcLoc {
     line: u32,
     offset: usize,
+    file_name: Option<String>,
 }
 
 impl Display for SrcLoc {
@@ -37,10 +37,12 @@ fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 }
 
 fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    let file_name = i.extra.map(|x| x.to_string());
     let pos = position::<Span, VerboseError<Span>>(i)?.1;
     let src_loc = SrcLoc {
         line: pos.location_line(),
         offset: pos.location_offset(),
+        file_name,
     };
     map(
         delimited(char('"'), many0(is_not("\"")), char('"')),
@@ -57,9 +59,11 @@ fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 
 fn parse_keyword(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let file_name = i.extra.map(|x| x.to_string());
     let src_loc = SrcLoc {
         line: pos.location_line(),
         offset: pos.location_offset(),
+        file_name,
     };
 
     map(many1(is_not(";\n\r )(")), move |char_vec| {
@@ -79,6 +83,7 @@ pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
             Some(SrcLoc {
                 line: 13371337,
                 offset: 13371337,
+                file_name: None,
             }),
         ),
         None => Expr::Nil,
@@ -100,9 +105,11 @@ fn parse_list(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 
 fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let file_name = i.extra.map(|x| x.to_string());
     let src_loc = SrcLoc {
         line: pos.location_line(),
         offset: pos.location_offset(),
+        file_name: file_name.clone(),
     };
 
     map(
@@ -123,6 +130,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     Some(SrcLoc {
                         line: src_loc.line,
                         offset: src_loc.offset + "(".len(),
+                        file_name: file_name.clone(),
                     }),
                 )),
                 Box::new(Expr::Pair(
@@ -131,6 +139,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     Some(SrcLoc {
                         line: src_loc.line,
                         offset: src_loc.offset + "(quote".len(),
+                        file_name: file_name.clone(),
                     }),
                 )),
                 Some((&src_loc).clone()),
@@ -153,8 +162,14 @@ fn parse_expr(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     )(i)
 }
 
-pub fn parse(i: &str) -> Result<Vec<Expr>, String> {
-    many0(parse_expr)(Span::new(i))
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct ParseInput<'a> {
+    pub source: &'a str,
+    pub file_name: Option<&'a str>,
+}
+
+pub fn parse(input: &ParseInput) -> Result<Vec<Expr>, String> {
+    many0(parse_expr)(Span::new_extra(input.source, input.file_name))
         .map_err(|e| format!("{e:?}"))
         .and_then(|(remaining, exp)| match *remaining.fragment() {
             "" => Ok(exp),
@@ -171,45 +186,124 @@ fn test_parse_alphanumerics() {
         Ok(vec![Expr::Num(nr)])
     }
 
-    assert_eq!(parse("true"), Ok(vec![Expr::Boolean(true)]));
-    assert_eq!(parse("false"), Ok(vec![Expr::Boolean(false)]));
     assert_eq!(
-        parse("\"hello world\""),
+        parse(&ParseInput {
+            source: "true",
+            file_name: None
+        }),
+        Ok(vec![Expr::Boolean(true)])
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "false",
+            file_name: None
+        }),
+        Ok(vec![Expr::Boolean(false)])
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "\"hello world\"",
+            file_name: None
+        }),
         Ok(vec![Expr::String("hello world".to_string(), None)])
     );
     assert_eq!(
-        parse("(\"hello 1\" \"hello 2\" )"),
+        parse(&ParseInput {
+            source: "(\"hello 1\" \"hello 2\" )",
+            file_name: None
+        }),
         Ok(vec![make_pair_from_vec(vec![
             Expr::String("hello 1".to_string(), None),
             Expr::String("hello 2".to_string(), None),
         ])])
     );
-    assert_eq!(parse("+"), kw("+"));
-    assert_eq!(parse("'"), kw("'"));
-    assert_eq!(parse("1"), nr(1.));
-    assert_eq!(parse("5"), nr(5.));
+    assert_eq!(
+        parse(&ParseInput {
+            source: "+",
+            file_name: None
+        }),
+        kw("+")
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "'",
+            file_name: None
+        }),
+        kw("'")
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "1",
+            file_name: None
+        }),
+        nr(1.)
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "5",
+            file_name: None
+        }),
+        nr(5.)
+    );
 
-    assert_eq!(parse("  true  "), Ok(vec![Expr::Boolean(true)]));
-    assert_eq!(parse("  false  "), Ok(vec![Expr::Boolean(false)]));
-    assert_eq!(parse("  1  "), nr(1.));
-    assert_eq!(parse("  5  "), nr(5.));
+    assert_eq!(
+        parse(&ParseInput {
+            source: "  true  ",
+            file_name: None
+        }),
+        Ok(vec![Expr::Boolean(true)])
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "  false  ",
+            file_name: None
+        }),
+        Ok(vec![Expr::Boolean(false)])
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "  1  ",
+            file_name: None
+        }),
+        nr(1.)
+    );
+    assert_eq!(
+        parse(&ParseInput {
+            source: "  5  ",
+            file_name: None
+        }),
+        nr(5.)
+    );
 }
 
 #[test]
 fn test_parse_quote() {
-    let res = parse("'()");
+    let res = parse(&ParseInput {
+        source: "'()",
+        file_name: None,
+    });
     assert_eq!(res.as_ref().map(|x| x.len()), Ok(1));
 
     let borrowed = res.map(|x| x.first().cloned()).unwrap().unwrap();
     matches!(
         borrowed,
-        Expr::Quote(box Expr::Nil, Some(SrcLoc { line: 0, offset: 0 })),
+        Expr::Quote(
+            box Expr::Nil,
+            Some(SrcLoc {
+                line: 0,
+                offset: 0,
+                file_name: None,
+            }),
+        ),
     );
 
-    let res2 = parse("'(a b)")
-        .map(|x| x.first().cloned())
-        .unwrap()
-        .unwrap();
+    let res2 = parse(&ParseInput {
+        source: "'(a b)",
+        file_name: None,
+    })
+    .map(|x| x.first().cloned())
+    .unwrap()
+    .unwrap();
 
     assert_matches!(res2,
         Expr::Pair(
@@ -227,7 +321,13 @@ fn test_parse_quote() {
         ) if  a == *"a" && b == *"b" && quote == *"quote",
     );
 
-    let res3 = parse("'a").map(|x| x.first().cloned()).unwrap().unwrap();
+    let res3 = parse(&ParseInput {
+        source: "'a",
+        file_name: None,
+    })
+    .map(|x| x.first().cloned())
+    .unwrap()
+    .unwrap();
 
     use std::assert_matches::assert_matches;
     assert_matches!(res3,
@@ -241,10 +341,18 @@ fn test_parse_quote() {
 
 #[test]
 fn test_parse_comment() {
-    let res = parse("abc ; stuff").unwrap();
+    let res = parse(&ParseInput {
+        source: "abc ; stuff",
+        file_name: None,
+    })
+    .unwrap();
     assert_eq!(vec![Expr::Keyword("abc".to_string(), None)], res);
 
-    let res = parse("(abc) ; stuff").unwrap();
+    let res = parse(&ParseInput {
+        source: "(abc) ; stuff",
+        file_name: None,
+    })
+    .unwrap();
     assert_eq!(
         vec![make_pair_from_vec(vec![Expr::Keyword(
             "abc".to_string(),
@@ -253,11 +361,12 @@ fn test_parse_comment() {
         res
     );
 
-    let res = parse(
-        "(abc ; comment
+    let res = parse(&ParseInput {
+        source: "(abc ; comment
         cba
         ); stuff",
-    )
+        file_name: None,
+    })
     .unwrap();
     assert_eq!(
         vec![make_pair_from_vec(vec![
@@ -267,13 +376,14 @@ fn test_parse_comment() {
         res
     );
 
-    let res = parse(
-        "(abc ; comment
+    let res = parse(&ParseInput {
+        source: "(abc ; comment
         cba (
             hello ;abc
         )
         ); stuff",
-    )
+        file_name: None,
+    })
     .unwrap();
     assert_eq!(
         vec![make_pair_from_vec(vec![
@@ -294,13 +404,26 @@ fn test_parse_lists() {
             .collect();
         Ok(vec![make_pair_from_vec(stuff)])
     }
-    assert_eq!(parse("(a)"), ok_list(vec!(("a"))));
+    assert_eq!(
+        parse(&ParseInput {
+            source: "(a)",
+            file_name: None
+        }),
+        ok_list(vec!(("a")))
+    );
     assert_matches!(
-        parse("(123)").map(|x| x.split_first().map(|x| x.0.clone())),
+        parse(&ParseInput {
+            source: "(123)",
+            file_name: None
+        })
+        .map(|x| x.split_first().map(|x| x.0.clone())),
         Ok(Some(Expr::Pair(box Expr::Num(123.), box Expr::Nil, ..)))
     );
     assert_eq!(
-        parse("(     a         1       b          2      )"),
+        parse(&ParseInput {
+            source: "(     a         1       b          2      )",
+            file_name: None
+        }),
         Ok(vec![make_pair_from_vec(vec![
             Expr::Keyword("a".to_string(), None),
             Expr::Num(1.),
@@ -309,7 +432,10 @@ fn test_parse_lists() {
         ])])
     );
     assert_eq!(
-        parse("(     a         (wat    woo    wii)       b          2      )"),
+        parse(&ParseInput {
+            source: "(     a         (wat    woo    wii)       b          2      )",
+            file_name: None
+        }),
         Ok(vec![make_pair_from_vec(vec![
             Expr::Keyword("a".to_string(), None),
             make_pair_from_vec(vec!(

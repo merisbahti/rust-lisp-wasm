@@ -533,7 +533,14 @@ fn test_simple_add_compilation() {
 #[test]
 fn losta_compile() {
     fn parse_and_compile(input: &str) -> Vec<VMInstruction> {
-        let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
+        let expr = crate::parse::parse(&crate::parse::ParseInput {
+            source: input,
+            file_name: Some("parse_and_compile"),
+        })
+        .unwrap()
+        .first()
+        .unwrap()
+        .clone();
         let mut chunk = Chunk { code: vec![] };
         match compile_internal(&expr, &mut chunk, &get_globals()) {
             Ok(..) => chunk.code,
@@ -551,12 +558,14 @@ fn losta_compile() {
         ]
     );
     assert_eq!(
-        crate::vm::prepare_vm("(+ 1 2 3)".to_string(), None).map(|x| x
-            .0
-            .callframes
-            .get(0)
-            .map(|x| x.chunk.code.clone())
-            .unwrap()),
+        crate::vm::prepare_vm(
+            &crate::parse::ParseInput {
+                source: "(+ 1 2 3)",
+                file_name: Some("parse_and_compile"),
+            },
+            None
+        )
+        .map(|x| x.0.callframes.get(0).map(|x| x.chunk.code.clone()).unwrap()),
         Ok(vec![
             VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::Num(1.0)),
@@ -637,7 +646,14 @@ fn losta_compile() {
 #[test]
 fn lambda_compile_test() {
     fn parse_and_compile(input: &str) -> Chunk {
-        let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
+        let expr = crate::parse::parse(&crate::parse::ParseInput {
+            source: input,
+            file_name: Some("lambda_compile_test"),
+        })
+        .unwrap()
+        .first()
+        .unwrap()
+        .clone();
         let mut chunk = Chunk { code: vec![] };
         match compile_internal(&expr, &mut chunk, &get_globals()) {
             Ok(()) => chunk,

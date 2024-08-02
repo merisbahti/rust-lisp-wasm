@@ -10,7 +10,6 @@ fn test_call_other_macro_from_macro() {
             (defmacro (add) (three))
             (add)
             "
-            .to_string()
         ),
         Ok(Expr::Num(3.0))
     );
@@ -21,7 +20,6 @@ fn test_call_other_macro_from_macro() {
             (defmacro (three) 3)
             (defmacro (add) (cons '+ (cons (three) (cons (three) '())))) (add)
             "
-            .to_string()
         ),
         Ok(Expr::Num(6.0))
     );
@@ -32,7 +30,6 @@ fn test_call_other_macro_from_macro() {
             (defmacro (add) (syntax-list '+  (five) (five))) 
             (add)
             "
-            .to_string()
         ),
         Ok(Expr::Num(10.0))
     )
@@ -48,7 +45,6 @@ fn macro_definition_doesnt_leak_out_of_scope() {
             (defmacro (add) '(+ (three) (three)))
             (add)
             "
-            .to_string()
         ),
         Err("not found: three".to_string())
     )

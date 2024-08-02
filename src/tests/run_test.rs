@@ -6,8 +6,7 @@ fn many_tests() {
             "
         (define a '(1 2 3 4))
         (apply + a)            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(10.0))
     );
@@ -18,8 +17,7 @@ fn many_tests() {
         (define (fn a b) (+ a b))
         (define a '(1 2))
         (apply fn a)            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(3.0))
     );
@@ -31,8 +29,7 @@ fn many_tests() {
         (define (fn a b) (+ a b someval))
         (define a '(1 2))
         (apply fn a)            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(13.0))
     );
@@ -43,8 +40,7 @@ fn many_tests() {
         (define someval 10)
         (define a '(1 2))
         (apply (lambda (a b) (+ a b someval)) a)            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(13.0))
     );
@@ -55,8 +51,7 @@ fn many_tests() {
         (define someval 10)
         (define a '(1 2))
         (apply (lambda (a b) (+ a b someval)) a)            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(13.0))
     );
@@ -65,8 +60,7 @@ fn many_tests() {
         jit_run(
             "
         (apply (lambda (a b) b) '(0 15))            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(15.0))
     );
@@ -75,8 +69,7 @@ fn many_tests() {
         jit_run(
             "
         (apply (lambda (a b) a) '(0 15))            
-        "
-            .to_string(),
+        ",
         ),
         Ok(crate::expr::Expr::Num(0.0))
     );

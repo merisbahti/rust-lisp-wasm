@@ -224,12 +224,18 @@ fn expansion_noop_test() {
     fn noop_assertion(input: &str) {
         let macros = &mut HashMap::new();
         assert_eq!(
-            parse(input)
-                .and_then(|parsed| macro_expand(parsed, macros))
-                .unwrap(),
-            parse(input)
-                .map(|x| x.into_iter().collect::<Vec<Expr>>().clone())
-                .unwrap()
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_noop_test")
+            })
+            .and_then(|parsed| macro_expand(parsed, macros))
+            .unwrap(),
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_noop_test")
+            })
+            .map(|x| x.into_iter().collect::<Vec<Expr>>().clone())
+            .unwrap()
         )
     }
     noop_assertion("1");
@@ -249,7 +255,11 @@ fn expansion_test() {
     fn noop_test(input: &str, expected: &Expr) {
         let macros = &mut HashMap::new();
         assert_eq!(
-            parse(input).and_then(|parsed| macro_expand(parsed, macros)),
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_test")
+            })
+            .and_then(|parsed| macro_expand(parsed, macros)),
             Ok(vec![expected.clone()])
         )
     }
