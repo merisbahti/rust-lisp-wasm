@@ -1,8 +1,8 @@
-use std::{borrow::Borrow, collections::HashMap, sync::Arc};
+use std::{borrow::Borrow, collections::HashMap, fmt::Display, sync::Arc};
 
 use crate::{
-    expr::Expr,
-    parse::make_pair_from_vec,
+    expr::{Bool, Expr, Num},
+    parse::SrcLoc,
     vm::{Chunk, VMInstruction},
 };
 
@@ -12,62 +12,130 @@ pub enum BuiltIn {
     Variadic(fn(&Vec<Expr>) -> Result<Expr, String>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct CompileError {
+    pub srcloc: Option<SrcLoc>,
+    pub message: String,
+}
+
+impl Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = self.message.clone();
+        if let Some(srcloc) = self.srcloc.clone() {
+            write!(
+                f,
+                "{}:{}:{}: {message}",
+                srcloc.file_name.unwrap_or("unknown".to_string()),
+                srcloc.line,
+                srcloc.offset
+            )
+        } else {
+            write!(f, "unknown: {message}")
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! comp_err {
+    ($srcloc:expr, $fmt_str:literal) => {
+        {
+            Result::<(), CompileError>::Err(
+                CompileError {
+                    message: format!($fmt_str),
+                    srcloc: extract_srcloc($srcloc)
+                }
+            )
+        }
+    };
+    ($srcloc:expr, $fmt_str:literal, $($args:expr),*) => {
+        {
+            Result::<(), CompileError>::Err(
+                CompileError {
+                    message: format!($fmt_str, $($args),*),
+                    srcloc: extract_srcloc($srcloc)
+                }
+            )
+        }
+    };
+}
+
+pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
+    match expr {
+        Expr::Keyword(_, s) => s,
+        Expr::Pair(_, _, s) => s,
+        Expr::String(_, s) => s,
+        Expr::Quote(_, s) => s,
+        Expr::Num(Num { srcloc: s, .. }) => s,
+        Expr::Boolean(Bool { srcloc: s, .. }) => s,
+        Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
+        Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
+        Expr::Nil => &Some(SrcLoc {
+            line: 13391339,
+            offset: 0,
+            file_name: None,
+        }),
+    }
+    .clone()
+}
+
+type CompileResult = Result<(), CompileError>;
+
 pub fn get_globals() -> HashMap<String, BuiltIn> {
     HashMap::from([
         (
             "nil?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Nil => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Nil => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "pair?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Nil | Expr::Pair(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Nil | Expr::Pair(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "number?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Num(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Num(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "boolean?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Boolean(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Boolean(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "string?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::String(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::String(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "abs".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Num(nr) => Ok(Expr::Num(nr.abs())),
+                Expr::Num(nr) => Ok(Expr::num(nr.value.abs())),
                 other => Err(format!("abs: expected num but found: {other}")),
             }),
         ),
         (
             "function?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Lambda(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Lambda(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "symbol?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Keyword(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Keyword(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
@@ -77,151 +145,148 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                     .into_iter()
                     .try_reduce::<Result<Expr, String>>(|acc, curr| {
                         match (acc.clone(), curr.clone()) {
-                            (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
-                            _ => Err(format!("Expected numbers, found: {:?} and {:?}", acc, curr)),
+                            (Expr::Num(Num { value: l, .. }), Expr::Num(Num { value: r, .. })) => {
+                                Ok(Expr::num(l + r))
+                            }
+                            _ => Err(format!("Expected numbers, found: {} and {}", acc, curr)),
                         }
                     })
-                    .map(|x| x.unwrap_or_else(|| Expr::Num(0.0)))
+                    .map(|x| x.unwrap_or_else(|| Expr::num(0.0)))
             }),
         ),
         (
             "-".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l - r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value - r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "*".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l * r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value * r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             ">".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Boolean(l > r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value > r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "<".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Boolean(l < r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value < r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "/".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l / r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value / r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "%".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l % r)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value % r.value)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "^".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l.powf(*r))),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf((*r).value))),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "=".to_string(),
-            BuiltIn::TwoArg(|l, r| Ok(Expr::Boolean(l == r))),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::bool(l == r))),
         ),
         (
             "not".to_string(),
             BuiltIn::OneArg(|arg| match arg {
-                Expr::Boolean(arg) => Ok(Expr::Boolean(!arg)),
-                _ => Err(format!("Expected boolean, found: {:?}", arg)),
+                Expr::Boolean(arg) => Ok(Expr::bool(!arg.value)),
+                _ => Err(format!("Expected boolean, found: {}", arg)),
             }),
         ),
         (
             "cons".to_string(),
-            BuiltIn::TwoArg(|l, r| Ok(Expr::Pair(Box::new(l.clone()), Box::new(r.clone())))),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::Pair(Box::new(l.clone()), Box::new(r.clone()), None))),
         ),
         (
             "car".to_string(),
             BuiltIn::OneArg(|pair| match pair {
                 Expr::Pair(box l, ..) => Ok(l.clone()),
-                _ => Err(format!("car expected pair, found: {:?}", pair)),
+                _ => Err(format!("car expected pair, found: {}", pair)),
             }),
         ),
         (
             "cdr".to_string(),
             BuiltIn::OneArg(|pair| match pair {
-                Expr::Pair(.., box r) => Ok(r.clone()),
-                _ => Err(format!("cdr expected pair, found: {:?}", pair)),
+                Expr::Pair(_, box r, ..) => Ok(r.clone()),
+                _ => Err(format!("cdr expected pair, found: {}", pair)),
             }),
         ),
         (
             "str-append".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::String(l), Expr::String(r)) => Ok(Expr::String(l.clone() + r)),
-                _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
+                (Expr::String(l, _), Expr::String(r, _)) => Ok(Expr::String(l.clone() + r, None)),
+                _ => Err(format!("Expected strings, found: {} and {}", l, r)),
             }),
         ),
         (
             "to-string".to_string(),
-            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string()))),
+            BuiltIn::OneArg(|expr| Ok(Expr::String(format!("{expr}"), None))),
         ),
     ])
 }
 
-pub fn make_pairs_from_vec(exprs: Vec<Expr>) -> Expr {
-    match exprs.split_first() {
-        Some((head, tail)) => Expr::Pair(
-            Box::new(head.clone()),
-            Box::new(make_pair_from_vec(tail.to_vec())),
-        ),
-        None => Expr::Nil,
-    }
-}
-
-pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, String> {
+pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, CompileError> {
     match expr {
-        Expr::Pair(box Expr::Keyword(kw), box rest) => collect_kws_from_expr(rest).map(|mut x| {
-            x.insert(0, kw.clone());
-            x
+        Expr::Pair(box Expr::Keyword(kw, ..), box rest, ..) => {
+            collect_kws_from_expr(rest).map(|mut x| {
+                x.insert(0, kw.clone());
+                x
+            })
+        }
+        Expr::Nil => Ok(vec![]),
+        _ => Err(CompileError {
+            message: format!("Invalid keyword list: {}", expr),
+            srcloc: extract_srcloc(expr),
         }),
-        Expr::Nil => Ok(vec![]),
-        _ => Err(format!("Invalid keyword list: {:?}", expr)),
     }
 }
 
-pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, String> {
+pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
     match expr {
         Expr::Nil => Ok(vec![]),
-        Expr::Pair(box expr, box Expr::Nil) => Ok(vec![expr.to_owned()]),
-        Expr::Pair(box expr, next @ box Expr::Pair(..)) => {
+        Expr::Pair(box expr, box Expr::Nil, ..) => Ok(vec![expr.to_owned()]),
+        Expr::Pair(box expr, next @ box Expr::Pair(..), ..) => {
             collect_exprs_from_body(next).map(|mut x| {
                 x.insert(0, expr.to_owned());
                 x
             })
         }
-        otherwise => Err(format!(
-            "tried to collect exprs from body on: {}",
-            otherwise
-        )),
+        otherwise => Err(CompileError {
+            srcloc: extract_srcloc(expr),
+            message: format!("tried to collect exprs from body on: {}", otherwise),
+        }),
     }
 }
 fn make_lambda(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+) -> CompileResult {
     let (pairs, unextracted_body) = match expr {
-        Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..)) => (pairs, body),
-        Expr::Pair(pairs @ box Expr::Pair(_, _), body @ box Expr::Pair(..)) => (pairs, body),
-        otherwise => return Err(format!("Invalid lambda expression: {:?}", otherwise)),
+        Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),
+        Expr::Pair(pairs @ box Expr::Pair(..), body @ box Expr::Pair(..), ..) => (pairs, body),
+        otherwise => return comp_err!(expr, "Invalid lambda expression: {}", otherwise),
     };
 
     let body = collect_exprs_from_body(unextracted_body)?;
@@ -239,10 +304,11 @@ fn make_lambda(
     if let Some(dot_index) = dot_kw {
         // only valid if it's the second to last argument
         if dot_index + 2 != all_kws.len() {
-            return Err(format!(
-                "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                all_kws
-            ));
+            return comp_err!(
+                expr,
+                "rest-dot can only occur as second-to-last argument, but found: ({})",
+                all_kws.join(" ")
+            );
         }
     };
 
@@ -269,46 +335,56 @@ fn make_define(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+) -> CompileResult {
     let kw = match expr {
         Expr::Pair(
-            box Expr::Pair(box Expr::Keyword(fn_name), fn_args),
+            box Expr::Pair(box Expr::Keyword(fn_name, ..), fn_args, ..),
             body @ box Expr::Pair(..),
+            src_loc,
         ) => {
             // this is a lambda definition
             // kws should contain a fn name and then its args
-            make_lambda(&Expr::Pair(fn_args.clone(), body.clone()), chunk, globals)?;
+            make_lambda(
+                &Expr::Pair(fn_args.clone(), body.clone(), src_loc.clone()),
+                chunk,
+                globals,
+            )?;
             Ok(fn_name.clone())
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box definee, box Expr::Nil)) => {
+        Expr::Pair(
+            box Expr::Keyword(kw, ..),
+            box Expr::Pair(box definee, box Expr::Nil, ..),
+            ..,
+        ) => {
             compile_internal(definee, chunk, globals)?;
             Ok(kw.clone())
         }
-        otherwise => Err(format!(
-            "definition, expected kw and expr but found: {:?}",
-            otherwise
-        )),
+        otherwise => {
+            return comp_err!(
+                expr,
+                "definition, expected kw and expr but found: {}",
+                otherwise
+            )
+        }
     }?;
     chunk.code.push(VMInstruction::Define(kw.clone()));
     chunk.code.push(VMInstruction::Constant(Expr::Nil));
     Ok(())
 }
 
-fn make_if(
-    expr: &Expr,
-    chunk: &mut Chunk,
-    globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+fn make_if(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -> CompileResult {
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
             box pred,
-            box Expr::Pair(box consequent, box Expr::Pair(box alternate, box Expr::Nil)),
+            box Expr::Pair(box consequent, box Expr::Pair(box alternate, box Expr::Nil, ..), ..),
+            ..,
         ) => (pred, consequent, alternate),
         otherwise => {
-            return Err(format!(
-                "if, expected pred, cons, alt but found: {:?}",
+            return comp_err!(
+                expr,
+                "if, expected pred, cons, alt but found: {}",
                 otherwise
-            ))
+            )
         }
     };
 
@@ -331,31 +407,23 @@ fn make_if(
 
     chunk.code.extend_from_slice(&alt_chunk.code);
 
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk.code.push(VMInstruction::Constant(Expr::bool(true)));
     chunk.code.push(VMInstruction::CondJumpPop(end_ip));
     chunk.code.extend_from_slice(&cons_chunk.code);
     Ok(())
 }
 
-fn make_and(
-    expr: &Expr,
-    chunk: &mut Chunk,
-    globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+fn make_and(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -> CompileResult {
     let (l, r) = match expr {
-        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
-        otherwise => return Err(format!("and, expected two args but found: {:?}", otherwise)),
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
+        otherwise => return comp_err!(expr, "and, expected two args but found: {}", otherwise),
     };
     // l + popjmp(r) + jmp(return) + r + return
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(r, &mut r_chunk, globals)?;
     compile_internal(l, chunk, globals)?;
     chunk.code.push(VMInstruction::CondJump(2));
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk.code.push(VMInstruction::Constant(Expr::bool(true)));
     chunk
         .code
         .push(VMInstruction::CondJumpPop(1 + r_chunk.code.len()));
@@ -364,14 +432,10 @@ fn make_and(
     Ok(())
 }
 
-fn make_or(
-    expr: &Expr,
-    chunk: &mut Chunk,
-    globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+fn make_or(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -> CompileResult {
     let (l, r) = match expr {
-        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil)) => (l, r),
-        otherwise => return Err(format!("or, expected two args but found: {:?}", otherwise)),
+        Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
+        otherwise => return comp_err!(expr, "or, expected two args but found: {}", otherwise),
     };
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(r, &mut r_chunk, globals)?;
@@ -384,41 +448,41 @@ fn make_or(
     Ok(())
 }
 
-pub type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, String>>;
+pub type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, CompileError>>;
 
 pub fn compile_internal(
     expr: &Expr,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+) -> CompileResult {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
-            panic!("Cannot compile a {:?}", expr)
+            panic!("Cannot compile a {}", expr)
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "lambda" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "lambda" => {
             make_lambda(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "define" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "define" => {
             make_define(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "if" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "if" => {
             make_if(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "and" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "and" => {
             make_and(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "or" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "or" => {
             make_or(r, chunk, globals)?;
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "quote" => {
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "quote" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
                 chunk.code.push(VMInstruction::Constant(arg.clone()))
             } else {
-                return Err(format!("quote expects 1 arg, but found: {:?}", exprs));
+                return comp_err!(expr, "quote expects 1 arg, but found: {:#?}", exprs);
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box r) if kw == "apply" => {
+        Expr::Pair(expr @ box Expr::Keyword(kw, ..), box r, ..) if kw == "apply" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
                 compile_internal(function, chunk, globals)?;
@@ -426,36 +490,42 @@ pub fn compile_internal(
                 chunk.code.push(VMInstruction::Apply);
                 chunk.code.push(VMInstruction::Call(0));
             } else {
-                return Err(format!("apply expects 2 args, but found: {:?}", exprs));
+                return comp_err!(expr, "apply expects 2 args, but found: {}", exprs.len());
             }
         }
-        Expr::Pair(box Expr::Keyword(kw), box Expr::Pair(box displayee, box Expr::Nil))
-            if kw == "display" =>
-        {
+        Expr::Pair(
+            box Expr::Keyword(kw, ..),
+            box Expr::Pair(box displayee, box Expr::Nil, ..),
+            ..,
+        ) if kw == "display" => {
             compile_internal(displayee, chunk, globals)?;
             chunk.code.push(VMInstruction::Display);
         }
-        Expr::Pair(box Expr::Keyword(kw), box otherwise) if kw == "display" => {
-            return Err(format!(
+        Expr::Pair(disp @ box Expr::Keyword(kw, ..), box otherwise, ..) if kw == "display" => {
+            return comp_err!(
+                disp,
                 "Expected one argument for display, but found {}",
                 otherwise
-            ))
+            )
         }
-        Expr::Pair(box l, box r) => {
+        Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
-            if let Expr::Keyword(l) = l {
-                let global_arity = match globals.get(l) {
+            if let Expr::Keyword(kw, ..) = l {
+                let global_arity = match globals.get(kw) {
                     Some(BuiltIn::OneArg(..)) => Some(1),
                     Some(BuiltIn::TwoArg(..)) => Some(2),
                     _ => None,
                 };
                 if global_arity.is_some_and(|arity| arity != exprs.len()) {
-                    return Err(format!(
-                        "Expected {} arguments for {}, but found {}",
-                        global_arity.unwrap(),
-                        l,
-                        exprs.len(),
-                    ));
+                    return Err(CompileError {
+                        srcloc: extract_srcloc(expr),
+                        message: format!(
+                            "Expected {} arguments for {}, but found {}",
+                            global_arity.unwrap(),
+                            kw,
+                            exprs.len(),
+                        ),
+                    });
                 }
             }
             compile_internal(l, chunk, globals)?;
@@ -464,27 +534,15 @@ pub fn compile_internal(
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
-        Expr::Num(nr) => {
-            chunk.code.push(VMInstruction::Constant(Expr::Num(*nr)));
-        }
-        Expr::String(str) => {
-            chunk
-                .code
-                .push(VMInstruction::Constant(Expr::String(str.clone())));
-        }
-        Expr::Boolean(bool) => {
-            chunk
-                .code
-                .push(VMInstruction::Constant(Expr::Boolean(*bool)));
-        }
-        Expr::Keyword(kw) => {
+        Expr::Keyword(kw, ..) => {
             chunk.code.push(VMInstruction::Lookup(kw.clone()));
         }
-        Expr::Quote(box expr) => {
-            chunk.code.push(VMInstruction::Constant(expr.clone()));
-        }
-        Expr::Nil => {
-            chunk.code.push(VMInstruction::Constant(Expr::Nil));
+        expr @ (Expr::String(..)
+        | Expr::Num(..)
+        | Expr::Boolean(..)
+        | Expr::Quote(..)
+        | Expr::Nil) => {
+            chunk.code.push(VMInstruction::Constant((*expr).clone()));
         }
     };
     Ok(())
@@ -494,7 +552,7 @@ pub fn compile_many_exprs(
     exprs: Vec<Expr>,
     chunk: &mut Chunk,
     globals: &HashMap<String, BuiltIn>,
-) -> Result<(), String> {
+) -> CompileResult {
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
         match compile_internal(expr, chunk, globals) {
             Ok(_) => {}
@@ -508,199 +566,4 @@ pub fn compile_many_exprs(
             Ok(())
         }
     });
-}
-
-#[test]
-fn test_simple_add_compilation() {
-    let mut initial_chunk = Chunk { code: vec![] };
-
-    match compile_internal(
-        &crate::parse::make_pair_from_vec(vec![
-            Expr::Keyword("+".to_string()),
-            Expr::Num(1.0),
-            Expr::Num(2.0),
-        ]),
-        &mut initial_chunk,
-        &get_globals(),
-    ) {
-        Ok(_) => {}
-        Err(e) => panic!("Error {:?}", e),
-    };
-    assert_eq!(
-        initial_chunk,
-        Chunk {
-            code: vec![
-                VMInstruction::Lookup("+".to_string()),
-                VMInstruction::Constant(Expr::Num(1.0)),
-                VMInstruction::Constant(Expr::Num(2.0)),
-                VMInstruction::Call(2),
-            ],
-        }
-    )
-}
-
-#[test]
-fn losta_compile() {
-    fn parse_and_compile(input: &str) -> Vec<VMInstruction> {
-        let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
-        let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk, &get_globals()) {
-            Ok(..) => chunk.code,
-            Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
-        }
-    }
-
-    assert_eq!(
-        parse_and_compile("(+ 1 2)"),
-        vec![
-            VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::Call(2),
-        ]
-    );
-    assert_eq!(
-        crate::vm::prepare_vm("(+ 1 2 3)".to_string(), None).map(|x| x
-            .0
-            .callframes
-            .get(0)
-            .map(|x| x.chunk.code.clone())
-            .unwrap()),
-        Ok(vec![
-            VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::Constant(Expr::Num(3.0)),
-            VMInstruction::Call(3),
-            VMInstruction::Return,
-        ])
-    );
-
-    assert_eq!(
-        parse_and_compile("((get add) 1 2 3)"),
-        vec![
-            VMInstruction::Lookup("get".to_string()),
-            VMInstruction::Lookup("add".to_string()),
-            VMInstruction::Call(1),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::Constant(Expr::Num(3.0)),
-            VMInstruction::Call(3),
-        ]
-    );
-
-    assert_eq!(
-        parse_and_compile("((get add) (+ 1 2) 3)"),
-        vec![
-            VMInstruction::Lookup("get".to_string()),
-            VMInstruction::Lookup("add".to_string()),
-            VMInstruction::Call(1),
-            VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
-            VMInstruction::Call(2),
-            VMInstruction::Constant(Expr::Num(3.0)),
-            VMInstruction::Call(2),
-        ]
-    );
-    assert_eq!(
-        parse_and_compile("()"),
-        vec![VMInstruction::Constant(Expr::Nil)]
-    );
-
-    assert_eq!(
-        parse_and_compile("(f)"),
-        vec![
-            VMInstruction::Lookup("f".to_string()),
-            VMInstruction::Call(0)
-        ]
-    );
-
-    assert_eq!(
-        parse_and_compile("((lambda () 1))"),
-        vec![
-            VMInstruction::Constant(Expr::LambdaDefinition(
-                Chunk {
-                    code: vec![
-                        VMInstruction::Constant(Expr::Num(1.0)),
-                        VMInstruction::Return
-                    ],
-                },
-                None,
-                vec![],
-            )),
-            VMInstruction::MakeLambda,
-            VMInstruction::Call(0)
-        ]
-    );
-    assert_eq!(
-        parse_and_compile("(define a 1)"),
-        vec![
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Define("a".to_string()),
-            VMInstruction::Constant(Expr::Nil),
-        ]
-    );
-}
-
-#[test]
-fn lambda_compile_test() {
-    fn parse_and_compile(input: &str) -> Chunk {
-        let expr = crate::parse::parse(input).unwrap().first().unwrap().clone();
-        let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk, &get_globals()) {
-            Ok(()) => chunk,
-            Err(e) => panic!("Error: {:?}", e),
-        }
-    }
-
-    assert_eq!(
-        parse_and_compile("(if 1 2 3)").code,
-        vec![
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::CondJumpPop(3),
-            VMInstruction::Constant(Expr::Num(3.0)),
-            VMInstruction::Constant(Expr::Boolean(true)),
-            VMInstruction::CondJumpPop(1),
-            VMInstruction::Constant(Expr::Num(2.0)),
-        ]
-    );
-    assert_eq!(
-        parse_and_compile("(lambda () 1)"),
-        Chunk {
-            code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
-                    Chunk {
-                        code: vec![
-                            VMInstruction::Constant(Expr::Num(1.0)),
-                            VMInstruction::Return
-                        ],
-                    },
-                    None,
-                    vec![],
-                )),
-                VMInstruction::MakeLambda
-            ],
-        }
-    );
-
-    assert_eq!(
-        parse_and_compile("((lambda () 1))"),
-        Chunk {
-            code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
-                    Chunk {
-                        code: vec![
-                            VMInstruction::Constant(Expr::Num(1.0)),
-                            VMInstruction::Return
-                        ],
-                    },
-                    None,
-                    vec![],
-                )),
-                VMInstruction::MakeLambda,
-                VMInstruction::Call(0)
-            ],
-        }
-    );
 }

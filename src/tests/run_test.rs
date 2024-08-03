@@ -6,10 +6,9 @@ fn many_tests() {
             "
         (define a '(1 2 3 4))
         (apply + a)            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(10.0))
+        Ok(crate::expr::Expr::num(10.0))
     );
 
     assert_eq!(
@@ -18,10 +17,9 @@ fn many_tests() {
         (define (fn a b) (+ a b))
         (define a '(1 2))
         (apply fn a)            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(3.0))
+        Ok(crate::expr::Expr::num(3.0))
     );
 
     assert_eq!(
@@ -31,10 +29,9 @@ fn many_tests() {
         (define (fn a b) (+ a b someval))
         (define a '(1 2))
         (apply fn a)            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
@@ -43,10 +40,9 @@ fn many_tests() {
         (define someval 10)
         (define a '(1 2))
         (apply (lambda (a b) (+ a b someval)) a)            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
@@ -55,29 +51,26 @@ fn many_tests() {
         (define someval 10)
         (define a '(1 2))
         (apply (lambda (a b) (+ a b someval)) a)            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
         jit_run(
             "
         (apply (lambda (a b) b) '(0 15))            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(15.0))
+        Ok(crate::expr::Expr::num(15.0))
     );
 
     assert_eq!(
         jit_run(
             "
         (apply (lambda (a b) a) '(0 15))            
-        "
-            .to_string(),
+        ",
         ),
-        Ok(crate::expr::Expr::Num(0.0))
+        Ok(crate::expr::Expr::num(0.0))
     );
 }

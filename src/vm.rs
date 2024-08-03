@@ -1,25 +1,24 @@
 use crate::{
     compile::{collect_exprs_from_body, MacroFn},
+    expr::{Bool, Num},
     macro_expand::macro_expand,
+    parse::{make_pair_from_vec, ParseInput},
 };
-use std::collections::HashMap;
-
-use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    compile::{compile_many_exprs, get_globals, make_pairs_from_vec, BuiltIn},
+    compile::{compile_many_exprs, get_globals, BuiltIn},
     expr::Expr,
     parse,
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
     Lookup(String),
     MakeLambda,
     Define(String),
     PopStack,
     Apply,
-    If(usize),
     CondJumpPop(usize),
     CondJump(usize),
     Call(usize),
@@ -28,20 +27,38 @@ pub enum VMInstruction {
     Constant(Expr),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+impl Display for VMInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VMInstruction::Lookup(s) => write!(f, "Lookup({s})"),
+            VMInstruction::Define(s) => write!(f, "Define({s})"),
+            VMInstruction::CondJumpPop(u) => write!(f, "CondJumpPop({u})"),
+            VMInstruction::CondJump(u) => write!(f, "CondJump({u})"),
+            VMInstruction::Call(usize) => write!(f, "Call({usize})"),
+            VMInstruction::Constant(c) => write!(f, "Constant({c})"),
+            VMInstruction::Return => write!(f, "Return"),
+            VMInstruction::Display => write!(f, "Display"),
+            VMInstruction::PopStack => write!(f, "PopStack"),
+            VMInstruction::Apply => write!(f, "Apply"),
+            VMInstruction::MakeLambda => write!(f, "MakeLambda"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Env {
     pub map: HashMap<String, Expr>,
     pub parent: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Callframe {
     pub ip: usize,
     pub chunk: Chunk,
     pub env: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
@@ -49,7 +66,7 @@ pub struct VM {
     pub log: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Chunk {
     pub code: Vec<VMInstruction>,
 }
@@ -82,7 +99,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
     match instruction {
         VMInstruction::Display => {
             if let Some(top) = vm.stack.pop() {
-                vm.log.push(top.to_string());
+                vm.log.push(format!("{}", top));
                 vm.stack.push(Expr::Nil);
             } else {
                 return Err("no value to display on stack, compiler bug!".to_string());
@@ -96,7 +113,9 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             };
             match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => (),
+                Expr::Boolean(Bool { value: false, .. })
+                | Expr::Nil
+                | Expr::Num(Num { value: 0.0, .. }) => (),
                 _ => callframe.ip += *instruction,
             }
         }
@@ -108,7 +127,9 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             };
             match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => (),
+                Expr::Boolean(Bool { value: false, .. })
+                | Expr::Nil
+                | Expr::Num(Num { value: 0.0, .. }) => (),
                 _ => callframe.ip += *instruction,
             }
         }
@@ -149,12 +170,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
                     (instructions, variadic, kws)
                 }
-                stuff => {
-                    return Err(format!(
-                        "expected lambda definition, but found: {:?}",
-                        stuff
-                    ))
-                }
+                stuff => return Err(format!("expected lambda definition, but found: {stuff:#?}",)),
             };
             vm.stack
                 .push(Expr::Lambda(instructions, kws, variadic, definition_env));
@@ -190,7 +206,11 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                         Some(parent_name) => lookup_env(name.clone(), parent_name, envs, globals),
                         None => None,
                     })
-                    .or_else(|| globals.get(&name).map(|_| Expr::Keyword(name.clone())))
+                    .or_else(|| {
+                        globals
+                            .get(&name)
+                            .map(|_| Expr::Keyword(name.clone(), None))
+                    })
             }
 
             match lookup_env(name.to_string(), callframe.env.clone(), envs, globals) {
@@ -206,7 +226,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             match first {
-                Some(Expr::Keyword(str)) if let Some(builtin) = globals.get(&str) => {
+                Some(Expr::Keyword(str, ..)) if let Some(builtin) = globals.get(&str) => {
                     match builtin {
                         BuiltIn::OneArg(func) => {
                             if *arity != 1 {
@@ -260,19 +280,25 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                         .collect::<Vec<Expr>>();
                     if is_variadic && args.len() < vars.len() {
                         return Err(format!(
-                            "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                            "wrong number of args, expected at least {} ({}), got: ({})",
                             vars.len(),
-                            vars,
-                            args.len()
+                            vars.join(" "),
+                            args.into_iter()
+                                .map(|x| format!("{x}"))
+                                .collect::<Vec<String>>()
+                                .join(" ")
                         ));
                     }
 
                     if !is_variadic && args.len() != vars.len() {
                         return Err(format!(
-                            "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                            "wrong number of args, expected {} ({}), got: ({})",
                             vars.len(),
-                            vars,
-                            args.len()
+                            vars.join(" "),
+                            args.into_iter()
+                                .map(|x| format!("{x}"))
+                                .collect::<Vec<String>>()
+                                .join(" ")
                         ));
                     }
 
@@ -284,7 +310,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 
                     variadic.inspect(|arg_name| {
                         let (_, pairs) = args.split_at(vars.len());
-                        map.insert(arg_name.clone(), make_pairs_from_vec(pairs.to_vec()));
+                        map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
                     });
 
                     envs.insert(
@@ -304,8 +330,14 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
                 found => {
                     return Err(format!(
-                        "no function to call on stack, found: {:?}, \nstack:{:?}",
-                        found, vm.stack
+                        "no function to call on stack, found: {}, \nstack: {}",
+                        found.map(|x| format!("{x}")).unwrap_or("None".to_string()),
+                        vm.stack
+                            .clone()
+                            .into_iter()
+                            .map(|expr| format!("{expr}"))
+                            .collect::<Vec<_>>()
+                            .join(" ")
                     ))
                 }
             };
@@ -317,8 +349,13 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 (Some(rv), None) => rv,
                 (Some(a), Some(b)) => {
                     return Err(format!(
-                        "expected fn on stack after returning, but found: {a} {b} {:?}",
+                        "expected fn on stack after returning, but found: {a} {b} {}",
                         vm.stack
+                            .clone()
+                            .into_iter()
+                            .map(|x| format!("{x}"))
+                            .collect::<Vec<String>>()
+                            .join(" ")
                     ))
                 }
                 _ => return Err("too few args for return on stack".to_string()),
@@ -336,18 +373,6 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
         VMInstruction::Constant(expr) => {
             vm.stack.push(expr.clone());
         }
-        VMInstruction::If(alt_ip) => {
-            let pred = match vm.stack.pop() {
-                Some(pred) => pred,
-                found_vals => {
-                    return Err(format!("too few args for if on stack: {:?}", found_vals))
-                }
-            };
-            match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => callframe.ip += *alt_ip,
-                _ => {}
-            }
-        }
     }
     Ok(())
 }
@@ -355,9 +380,9 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
 fn test_add() {
     let chunk = Chunk {
         code: vec![
-            VMInstruction::Constant(Expr::Keyword("+".to_string())),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
+            VMInstruction::Constant(Expr::Keyword("+".to_string(), None)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
             VMInstruction::Call(2),
             VMInstruction::Return,
         ],
@@ -374,7 +399,7 @@ fn test_add() {
 
     assert!(run(&mut vm, &get_globals()).is_ok());
 
-    debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
+    debug_assert_eq!(vm.stack, vec![Expr::num(3.0)])
 }
 
 pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
@@ -393,9 +418,12 @@ pub struct CompilerEnv {
     pub macros: Macros,
 }
 
-pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM, Macros), String> {
+pub fn prepare_vm(
+    input: &ParseInput,
+    initial_env: Option<CompilerEnv>,
+) -> Result<(VM, Macros), String> {
     let compiler_env = initial_env.unwrap_or_default();
-    let exprs = match parse::parse(&input) {
+    let exprs = match parse::parse(input) {
         Ok(res) => res,
         Err(err) => return Err(err),
     };
@@ -405,9 +433,10 @@ pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
-    let macro_expanded = macro_expand(exprs, &mut macros)?;
+    let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
 
-    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())?;
+    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())
+        .map_err(|err| format!("{err}"))?;
 
     let callframe = Callframe {
         ip: 0,
@@ -420,9 +449,17 @@ pub fn prepare_vm(input: String, initial_env: Option<CompilerEnv>) -> Result<(VM
 }
 
 #[allow(dead_code)]
-pub fn jit_run_vm(input: String) -> Result<VM, String> {
+pub fn jit_run_vm(input: &str) -> Result<VM, String> {
     let prelude = get_prelude();
-    let (mut vm, _) = match prelude.and_then(|env| prepare_vm(input, Some(env))) {
+    let (mut vm, _) = match prelude.and_then(|env| {
+        prepare_vm(
+            &ParseInput {
+                source: input,
+                file_name: Some("jit_run_vm"),
+            },
+            Some(env),
+        )
+    }) {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
@@ -431,7 +468,7 @@ pub fn jit_run_vm(input: String) -> Result<VM, String> {
 
 // just for tests
 #[allow(dead_code)]
-pub fn jit_run(input: String) -> Result<Expr, String> {
+pub fn jit_run(input: &str) -> Result<Expr, String> {
     let vm = jit_run_vm(input)?;
     match vm.stack.first() {
         Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
@@ -444,14 +481,20 @@ pub fn jit_run(input: String) -> Result<Expr, String> {
 
 pub fn get_prelude() -> Result<CompilerEnv, String> {
     let prelude_string = include_str!("../prelude.scm").to_string();
-    let (mut vm, macros) = prepare_vm(prelude_string, None)
-        .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
-    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {:?}", err))?;
+    let (mut vm, macros) = prepare_vm(
+        &ParseInput {
+            source: &prelude_string,
+            file_name: Some("prelude"),
+        },
+        None,
+    )
+    .map_err(|err| format!("Error when compiling prelude: {}", err))?;
+    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {}", err))?;
 
     if !vm.log.is_empty() {
         return Err(format!(
-            "logs were printed happend while evaluating prelude (failed assertions?): {:?}",
-            vm.log
+            "logs were printed happend while evaluating prelude (failed assertions?):\n{}",
+            vm.log.join("\n")
         ));
     }
 
@@ -466,16 +509,16 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
 
 #[test]
 fn compiled_test() {
-    let res = jit_run("(+ 1 2)".to_string());
-    assert_eq!(res, Ok(Expr::Num(3.0)));
-    let res = jit_run("(+ 1 (+ 2 3))".to_string());
-    assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = jit_run("(+ (+ 2 3) 1)".to_string());
-    assert_eq!(res, Ok(Expr::Num(6.0)));
-    let res = jit_run("((lambda () 1))".to_string());
-    assert_eq!(res, Ok(Expr::Num(1.0)));
-    let res = jit_run("((lambda (a b) (+ a (+ b b))) 1 2)".to_string());
-    assert_eq!(res, Ok(Expr::Num(5.0)));
+    let res = jit_run("(+ 1 2)");
+    assert_eq!(res, Ok(Expr::num(3.0)));
+    let res = jit_run("(+ 1 (+ 2 3))");
+    assert_eq!(res, Ok(Expr::num(6.0)));
+    let res = jit_run("(+ (+ 2 3) 1)");
+    assert_eq!(res, Ok(Expr::num(6.0)));
+    let res = jit_run("((lambda () 1))");
+    assert_eq!(res, Ok(Expr::num(1.0)));
+    let res = jit_run("((lambda (a b) (+ a (+ b b))) 1 2)");
+    assert_eq!(res, Ok(Expr::num(5.0)));
 
     assert_eq!(
         jit_run(
@@ -484,9 +527,8 @@ fn compiled_test() {
 (define y 2)
 (+ x y)
         "
-            .to_string()
         ),
-        Ok(Expr::Num(3.0))
+        Ok(Expr::num(3.0))
     );
 
     assert_eq!(
@@ -499,9 +541,8 @@ fn compiled_test() {
 ))
 (fn)
         "
-            .to_string()
         ),
-        Ok(Expr::Num(12.0))
+        Ok(Expr::num(12.0))
     );
 
     assert_eq!(
@@ -514,9 +555,8 @@ fn compiled_test() {
 ))
 (fn)
         "
-            .to_string()
         ),
-        Ok(Expr::Num(12.0))
+        Ok(Expr::num(12.0))
     );
 
     assert_eq!(
@@ -532,7 +572,6 @@ fn compiled_test() {
 ))
 (fnB)
         "
-            .to_string()
         ),
         Err("not found: y".to_string())
     );
@@ -541,9 +580,8 @@ fn compiled_test() {
             "
 (if 1 2 3)
 "
-            .to_string()
         ),
-        Ok(Expr::Num(2.0))
+        Ok(Expr::num(2.0))
     );
 
     assert_eq!(
@@ -551,9 +589,8 @@ fn compiled_test() {
             "
 (if (+ 0 0) 2 3)
 "
-            .to_string()
         ),
-        Ok(Expr::Num(3.0))
+        Ok(Expr::num(3.0))
     );
 
     assert_eq!(
@@ -562,9 +599,8 @@ fn compiled_test() {
 (define f (lambda (a b) 0))
 (if (f 3 -3) 2 10)
 "
-            .to_string()
         ),
-        Ok(Expr::Num(10.0))
+        Ok(Expr::num(10.0))
     );
     assert_eq!(
         jit_run(
@@ -574,12 +610,11 @@ fn compiled_test() {
   )))
     
 (f 10)"
-                .to_string()
         ),
-        Ok(Expr::Num(0.0))
+        Ok(Expr::num(0.0))
     );
-    assert_eq!(jit_run("(= 1 1)".to_string()), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(= 1 10)".to_string()), Ok(Expr::Boolean(false)));
+    assert_eq!(jit_run("(= 1 1)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(= 1 10)"), Ok(Expr::bool(false)));
 
     assert_eq!(
         jit_run(
@@ -591,9 +626,8 @@ fn compiled_test() {
   b
   (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
-                .to_string()
         ),
-        Ok(Expr::Num(2.880067194370816e18))
+        Ok(Expr::num(2.880067194370816e18))
     );
 
     assert_eq!(
@@ -607,9 +641,8 @@ fn compiled_test() {
   )))
   
 (fib 10)"
-                .to_string()
         ),
-        Ok(Expr::Num(89.0))
+        Ok(Expr::num(89.0))
     );
 
     assert_eq!(
@@ -621,59 +654,37 @@ fn compiled_test() {
     '()
     (cons (proc (car items)) (map proc (cdr items))))))
 (map (lambda (x) (+ 1 x)) '(1 2 3))"
-                .to_string()
         ),
         Ok(parse::make_pair_from_vec(vec![
-            Expr::Num(2.0),
-            Expr::Num(3.0),
-            Expr::Num(4.0)
+            Expr::num(2.0),
+            Expr::num(3.0),
+            Expr::num(4.0)
         ]))
     );
 
+    assert_eq!(jit_run("(and true true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(and false true)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(and true false)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(and false false)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(or true true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or false true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or true false)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or false false)"), Ok(Expr::bool(false)));
+
     assert_eq!(
-        jit_run("(and true true)".to_string()),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        jit_run("(and false true)".to_string()),
-        Ok(Expr::Boolean(false))
-    );
-    assert_eq!(
-        jit_run("(and true false)".to_string()),
-        Ok(Expr::Boolean(false))
-    );
-    assert_eq!(
-        jit_run("(and false false)".to_string()),
-        Ok(Expr::Boolean(false))
-    );
-    assert_eq!(
-        jit_run("(or true true)".to_string()),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        jit_run("(or false true)".to_string()),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        jit_run("(or true false)".to_string()),
-        Ok(Expr::Boolean(true))
-    );
-    assert_eq!(
-        jit_run("(or false false)".to_string()),
-        Ok(Expr::Boolean(false))
+        jit_run("(lambda (.) stuff)"),
+        Err(
+            "jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (.)"
+                .to_string()
+        )
     );
 
     assert_eq!(
-        jit_run("(lambda (.) stuff)".to_string()),
-        Err("rest-dot can only occur as second-to-last argument, but found: [\".\"]".to_string())
-    );
-
-    assert_eq!(
-        jit_run("(lambda (. more extra) stuff)".to_string()),
-        Err("rest-dot can only occur as second-to-last argument, but found: [\".\", \"more\", \"extra\"]".to_string())
+        jit_run("(lambda (. more extra) stuff)"),
+         Err("jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (. more extra)".to_string())
     );
     assert_eq!(
-        jit_run("(lambda (. more) stuff)".to_string()),
+        jit_run("(lambda (. more) stuff)"),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
@@ -688,7 +699,7 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(lambda (a b . more) stuff)".to_string()),
+        jit_run("(lambda (a b . more) stuff)"),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
@@ -703,37 +714,34 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2)".to_string()),
-        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 2".to_string())
+        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2)"),
+        Err("wrong number of args, expected 3 (a b c), got: (1 2)".to_string())
     );
 
     assert_eq!(
-        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)".to_string()),
-        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 4".to_string())
+        jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)"),
+        Err("wrong number of args, expected 3 (a b c), got: (1 2 3 4)".to_string())
     );
 
     assert_eq!(
-        jit_run("((lambda (. more) more) 1 2 3 4 5)".to_string()),
+        jit_run("((lambda (. more) more) 1 2 3 4 5)"),
         Ok(parse::make_pair_from_vec(vec![
-            Expr::Num(1.0),
-            Expr::Num(2.0),
-            Expr::Num(3.0),
-            Expr::Num(4.0),
-            Expr::Num(5.0)
+            Expr::num(1.0),
+            Expr::num(2.0),
+            Expr::num(3.0),
+            Expr::num(4.0),
+            Expr::num(5.0)
         ]))
     );
 
+    assert_eq!(jit_run("(defmacro (m) 10) (m)"), Ok(Expr::num(10.0),));
     assert_eq!(
-        jit_run("(defmacro (m) 10) (m)".to_string()),
-        Ok(Expr::Num(10.0),)
+        jit_run("(defmacro (m a) (cons '+ (cons 1 (cons 2 '())))) (m 2)"),
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
-        jit_run("(defmacro (m a) (cons '+ (cons 1 (cons 2 '())))) (m 2)".to_string()),
-        Ok(Expr::Num(3.0),)
-    );
-    assert_eq!(
-        jit_run("(defmacro (m a) (cons '+ (cons a (cons 2 '())))) (m 1)".to_string()),
-        Ok(Expr::Num(3.0),)
+        jit_run("(defmacro (m a) (cons '+ (cons a (cons 2 '())))) (m 1)"),
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
         jit_run(
@@ -749,10 +757,9 @@ fn compiled_test() {
                      
                      )
                 
-           "
-            .to_string(),
+           ",
         ),
-        Ok(Expr::Num(11.0))
+        Ok(Expr::num(11.0))
     );
 
     assert_eq!(
@@ -772,9 +779,12 @@ fn compiled_test() {
             ) 
             (add 1 2)
             "
-            .to_string()
         ),
-        parse::parse("(+ 1 (+ 2 0))").map(|x| match x.first() {
+        parse::parse(&ParseInput {
+            source: "(+ 1 (+ 2 0))",
+            file_name: None
+        })
+        .map(|x| match x.first() {
             Some(x) => x.clone(),
             None => panic!(),
         })
@@ -796,9 +806,8 @@ fn compiled_test() {
             ) 
             (add 1 2)
             "
-            .to_string()
         ),
-        Ok(Expr::Num(3.0),)
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
         jit_run(
@@ -817,9 +826,8 @@ fn compiled_test() {
             ) 
             (add 1 2 3 4 5)
             "
-            .to_string()
         ),
-        Ok(Expr::Num(15.0),)
+        Ok(Expr::num(15.0),)
     );
 
     assert_eq!(
@@ -827,9 +835,8 @@ fn compiled_test() {
             "
             (str-append (str-append \"hello\" \" \") \"world\")
             "
-            .to_string()
         ),
-        Ok(Expr::String("hello world".to_string()),)
+        Ok(Expr::String("hello world".to_string(), None),)
     );
 
     assert_eq!(
@@ -838,20 +845,19 @@ fn compiled_test() {
             (define add +)
             (add 1 2 3)
 "
-            .to_string()
         ),
-        Ok(Expr::Num(6.0))
+        Ok(Expr::num(6.0))
     );
 
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
     assert_eq!(
-        jit_run(example_str.to_string()),
-        Ok(make_pairs_from_vec(vec![
-            Expr::Boolean(true),
-            Expr::Boolean(false),
-            Expr::Boolean(false),
-            Expr::Boolean(false),
-            Expr::Boolean(false)
+        jit_run(example_str),
+        Ok(make_pair_from_vec(vec![
+            Expr::bool(true),
+            Expr::bool(false),
+            Expr::bool(false),
+            Expr::bool(false),
+            Expr::bool(false)
         ]))
     );
 }

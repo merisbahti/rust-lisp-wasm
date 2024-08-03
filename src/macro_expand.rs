@@ -1,9 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::compile::{collect_exprs_from_body, collect_kws_from_expr, compile_many_exprs};
+use crate::comp_err;
+use crate::compile::{
+    collect_exprs_from_body, collect_kws_from_expr, compile_many_exprs, extract_srcloc,
+    CompileError,
+};
+use crate::parse::make_pair_from_vec;
 use crate::vm::{run, Callframe};
 use crate::{
-    compile::{get_globals, make_pairs_from_vec, MacroFn},
+    compile::{get_globals, MacroFn},
     expr::Expr,
     vm::{get_initial_vm_and_chunk, Chunk, Env, VMInstruction},
 };
@@ -24,10 +29,12 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             if let Some(dot_index) = dot_kw {
                 // only valid if it's the second to last argument
                 if dot_index + 2 != all_kws.len() {
-                    return Err(format!(
-                        "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                        all_kws
-                    ));
+                    return comp_err!(
+                        &macro_definition,
+                        "rest-dot can only occur as second-to-last argument, but found: ({})",
+                        all_kws.join(" ")
+                    )
+                    .map(|_| Expr::Nil);
                 }
             };
 
@@ -37,21 +44,31 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             let is_variadic = variadic.is_some();
 
             if is_variadic && args.len() < vars.len() {
-                return Err(format!(
-                    "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                return comp_err!(
+                    &macro_definition,
+                    "wrong number of args, expected at least {} ({}), got: ({})",
                     vars.len(),
-                    vars,
-                    args.len()
-                ));
+                    vars.join(" "),
+                    args.into_iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                )
+                .map(|_| Expr::Nil);
             }
 
             if !is_variadic && args.len() != vars.len() {
-                return Err(format!(
-                    "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                return comp_err!(
+                    &macro_definition,
+                    "wrong number of args, expected {} ({}), got: ({})",
                     vars.len(),
-                    vars,
-                    args.len()
-                ));
+                    vars.join(" "),
+                    args.into_iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                )
+                .map(|_| Expr::Nil);
             }
 
             let mut map = vars
@@ -62,10 +79,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
 
             variadic.inspect(|arg_name| {
                 let (_, pairs) = args.split_at(vars.len());
-                map.insert(
-                    arg_name.clone().clone(),
-                    make_pairs_from_vec(pairs.to_vec()),
-                );
+                map.insert(arg_name.clone().clone(), make_pair_from_vec(pairs.to_vec()));
             });
 
             let initial_env = Env { map, parent: None };
@@ -89,16 +103,22 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             match run(&mut vm, &get_globals()) {
                 Ok(e) => e,
                 Err(err) => {
-                    return Result::Err(format!("Error when running macro expansion: {err}"))
+                    return comp_err!(
+                        &macro_definition,
+                        "Error when running macro expansion: {err}"
+                    )
+                    .map(|_| Expr::Nil);
                 }
             };
 
             match vm.stack.first() {
                 Some(top) if vm.stack.len() == 1 => Ok(top.clone()),
-                _ => Result::Err(format!(
+                _ => comp_err!(
+                    &macro_definition,
                     "expected one value on the stack, got {:#?}",
                     vm.stack
-                )),
+                )
+                .map(|_| Expr::Nil),
             }
         }
     })
@@ -107,70 +127,88 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
 pub fn macro_expand_one(
     expr: &Expr,
     macros: &mut HashMap<String, MacroFn>,
-) -> Result<Expr, String> {
+) -> Result<Expr, CompileError> {
     let argmacros = macros.clone();
     match expr {
-        expr @ Expr::Quote(_) => Ok(expr.clone()),
-        expr @ Expr::Pair(box Expr::Keyword(quote), _) if quote == "quote" => Ok(expr.clone()),
-        Expr::Pair(box Expr::Keyword(kw), box r) if let Some(found_macro) = argmacros.get(kw) => {
+        expr @ Expr::Quote(..) => Ok(expr.clone()),
+        expr @ Expr::Pair(box Expr::Keyword(quote, ..), ..) if quote == "quote" => Ok(expr.clone()),
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, _)
+            if let Some(found_macro) = argmacros.get(kw) =>
+        {
             let expanded_body = macro_expand_one(r, macros)?;
-            let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
-                format!(
+            let args = collect_exprs_from_body(&expanded_body).map_err(|_| CompileError {
+                srcloc: extract_srcloc(expr),
+                message: format!(
                     "Error when collecting kws for macro expansion, found: {}",
                     r
-                )
+                ),
             })?;
             found_macro(&args)
         }
 
-        Expr::Pair(
-            box Expr::Keyword(macroexpand),
+        pair @ Expr::Pair(
+            box Expr::Keyword(macroexpand, ..),
             box Expr::Pair(
                 box Expr::Pair(
-                    box Expr::Keyword(quote),
-                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), box r), box Expr::Nil),
+                    box Expr::Keyword(quote, ..),
+                    box Expr::Pair(
+                        box Expr::Pair(box Expr::Keyword(kw, ..), box r, _),
+                        box Expr::Nil,
+                        _,
+                    ),
+                    _,
                 ),
                 box Expr::Nil,
+                srcloc,
             ),
+            _,
         ) if let (Some(found_macro), "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
             let expanded_body = macro_expand_one(r, macros)?;
-            let args = collect_exprs_from_body(&expanded_body).map_err(|_| {
-                format!(
+            let args = collect_exprs_from_body(&expanded_body).map_err(|_| CompileError {
+                srcloc: extract_srcloc(pair),
+                message: format!(
                     "Error when collecting kws for macro expansion, found: {}",
                     r
-                )
+                ),
             })?;
-            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone())))
+            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone()), srcloc.clone()))
         }
 
         Expr::Pair(
-            box Expr::Keyword(macroexpand),
+            box Expr::Keyword(macroexpand, ..),
             box Expr::Pair(
                 box Expr::Pair(
-                    box Expr::Keyword(quote),
-                    box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw), _), box Expr::Nil),
+                    box Expr::Keyword(quote, ..),
+                    box Expr::Pair(
+                        box Expr::Pair(box Expr::Keyword(kw, ..), ..),
+                        box Expr::Nil,
+                        ..,
+                    ),
+                    ..,
                 ),
                 box Expr::Nil,
+                _,
             ),
+            _,
         ) if let (None, "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
-            Err(format!("macro not found: {kw}"))
+            comp_err!(expr, "macro not found: {kw}").map(|_| Expr::Nil)
         }
-        Expr::Pair(box Expr::Keyword(macroexpand), rest)
+        Expr::Pair(box Expr::Keyword(macroexpand, ..), rest, ..)
             if let "macroexpand" = (macroexpand.as_str()) =>
         {
-            Err(format!("can't call macroexpand on {rest}"))
+            comp_err!(expr, "can't call macroexpand on {rest}").map(|_| Expr::Nil)
         }
-        pair @ Expr::Pair(_, _) => {
+        pair @ Expr::Pair(..) => {
             let exprs = collect_exprs_from_body(pair)?;
             let expanded_exprs = exprs
                 .into_iter()
                 .map(|expr| macro_expand_one(&expr, macros))
-                .collect::<Result<Vec<Expr>, String>>()?;
-            Ok(make_pairs_from_vec(expanded_exprs))
+                .collect::<Result<Vec<Expr>, CompileError>>()?;
+            Ok(make_pair_from_vec(expanded_exprs))
         }
         otherwise => Ok(otherwise.clone()),
     }
@@ -179,19 +217,24 @@ pub fn macro_expand_one(
 pub fn macro_expand(
     exprs: Vec<Expr>,
     macros: &mut HashMap<String, MacroFn>,
-) -> Result<Vec<Expr>, String> {
+) -> Result<Vec<Expr>, CompileError> {
     let mut expanded_exprs = Vec::new();
     for expr in exprs {
+        let srcloc = extract_srcloc(&expr.clone());
         match expr {
             Expr::Pair(
-                box Expr::Keyword(kw),
+                box Expr::Keyword(kw, ..),
                 box Expr::Pair(
-                    box Expr::Pair(box Expr::Keyword(macro_name), box args),
+                    box Expr::Pair(box Expr::Keyword(macro_name, ..), box args, ..),
                     box macro_body,
+                    ..,
                 ),
+                ..,
             ) if kw == "defmacro" => {
-                let args = collect_kws_from_expr(&args)
-                    .map_err(|_| "Error when collecting kws for macro definition")?;
+                let args = collect_kws_from_expr(&args).map_err(|_| CompileError {
+                    srcloc,
+                    message: "Error when collecting kws for macro definition".to_string(),
+                })?;
                 let expanded_macro_body = macro_expand_one(&macro_body, macros)?;
                 let new_macro = make_macro(&args, &expanded_macro_body);
                 macros.insert(macro_name.clone(), new_macro);
@@ -208,12 +251,18 @@ fn expansion_noop_test() {
     fn noop_assertion(input: &str) {
         let macros = &mut HashMap::new();
         assert_eq!(
-            parse(input)
-                .and_then(|parsed| macro_expand(parsed, macros))
-                .unwrap(),
-            parse(input)
-                .map(|x| x.into_iter().collect::<Vec<Expr>>().clone())
-                .unwrap()
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_noop_test")
+            })
+            .and_then(|parsed| macro_expand(parsed, macros).map_err(|err| format!("{err}")))
+            .unwrap(),
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_noop_test")
+            })
+            .map(|x| x.into_iter().collect::<Vec<Expr>>().clone())
+            .unwrap()
         )
     }
     noop_assertion("1");
@@ -233,7 +282,11 @@ fn expansion_test() {
     fn noop_test(input: &str, expected: &Expr) {
         let macros = &mut HashMap::new();
         assert_eq!(
-            parse(input).and_then(|parsed| macro_expand(parsed, macros)),
+            parse(&crate::parse::ParseInput {
+                source: input,
+                file_name: Some("expansion_test")
+            })
+            .and_then(|parsed| macro_expand(parsed, macros).map_err(|x| x.to_string())),
             Ok(vec![expected.clone()])
         )
     }
@@ -242,13 +295,13 @@ fn expansion_test() {
         (defmacro (compile-time-add a b) (+ a b))
         (compile-time-add 5 2)
         ",
-        &Expr::Num(7.0),
+        &Expr::num(7.0),
     );
     noop_test(
         "
         (defmacro (compile-time-add a b) (+ a b))
         (compile-time-add (compile-time-add 1 2) 2)
         ",
-        &Expr::Num(5.0),
+        &Expr::num(5.0),
     );
 }

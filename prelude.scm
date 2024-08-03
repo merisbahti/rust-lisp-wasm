@@ -13,7 +13,8 @@
       (cons 'cons (cons curr (cons acc '()))))
     '()
     xs))
-(defmacro (let definitions body)
+
+(defmacro (let definitions . body)
   (define (fold-right op initial sequence)
     (if
       (nil? sequence)
@@ -29,7 +30,7 @@
                      (cons
                        (cons 'define (cons definee (cons expr '())))
                        acc))
-                   (cons body '())
+                   body
                    definitions))
   (cons (cons 'lambda (cons '() deflist)) '()))
 
@@ -68,6 +69,12 @@
                (cons 'if (cons predicate (cons consequent (cons acc '())))))
     '()
     exprs))
+
+(define (list-ref list count)
+  (cond
+    ((nil? list) '())
+    ((< 1 count) (car list))
+    (true (list-ref (cdr list) (- count 1)))))
 
 (defmacro (dprint . exprs)
   (define (fold-right op initial sequence)
