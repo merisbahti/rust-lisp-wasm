@@ -448,7 +448,7 @@ fn make_or(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -
     Ok(())
 }
 
-pub type MacroFn = Arc<dyn Fn(&Vec<Expr>) -> Result<Expr, CompileError>>;
+pub type MacroFn = Arc<dyn Fn(Option<SrcLoc>, &Vec<Expr>) -> Result<Expr, CompileError>>;
 
 pub fn compile_internal(
     expr: &Expr,

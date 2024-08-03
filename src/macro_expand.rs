@@ -19,7 +19,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
         let macro_definition = macro_definition.clone();
         let all_kws = params.clone();
 
-        move |args| {
+        move |srcloc, args| {
             let dot_kw = all_kws
                 .iter()
                 .enumerate()
@@ -44,31 +44,30 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             let is_variadic = variadic.is_some();
 
             if is_variadic && args.len() < vars.len() {
-                return comp_err!(
-                    &macro_definition,
-                    "wrong number of args, expected at least {} ({}), got: ({})",
-                    vars.len(),
-                    vars.join(" "),
-                    args.into_iter()
-                        .map(|x| format!("{x}"))
-                        .collect::<Vec<String>>()
-                        .join(" ")
-                )
-                .map(|_| Expr::Nil);
+                return Err(CompileError {
+                    srcloc,
+                    message: format!(
+                        "wrong number of args, expected at least {} ({}), got: ({})",
+                        &macro_definition,
+                        vars.len(),
+                        vars.join(" "),
+                    ),
+                });
             }
 
             if !is_variadic && args.len() != vars.len() {
-                return comp_err!(
-                    &macro_definition,
-                    "wrong number of args, expected {} ({}), got: ({})",
-                    vars.len(),
-                    vars.join(" "),
-                    args.into_iter()
-                        .map(|x| format!("{x}"))
-                        .collect::<Vec<String>>()
-                        .join(" ")
-                )
-                .map(|_| Expr::Nil);
+                return Err(CompileError {
+                    srcloc,
+                    message: format!(
+                        "macro wrong number of args, expected {} ({}), got: ({})",
+                        vars.len(),
+                        vars.join(" "),
+                        args.into_iter()
+                            .map(|x| format!("{x}"))
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                    ),
+                });
             }
 
             let mut map = vars
@@ -132,7 +131,7 @@ pub fn macro_expand_one(
     match expr {
         expr @ Expr::Quote(..) => Ok(expr.clone()),
         expr @ Expr::Pair(box Expr::Keyword(quote, ..), ..) if quote == "quote" => Ok(expr.clone()),
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, _)
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, srcloc)
             if let Some(found_macro) = argmacros.get(kw) =>
         {
             let expanded_body = macro_expand_one(r, macros)?;
@@ -143,7 +142,7 @@ pub fn macro_expand_one(
                     r
                 ),
             })?;
-            found_macro(&args)
+            found_macro(srcloc.clone(), &args)
         }
 
         pair @ Expr::Pair(
@@ -173,7 +172,8 @@ pub fn macro_expand_one(
                     r
                 ),
             })?;
-            found_macro(&args).map(|x| Expr::Quote(Box::new(x.clone()), srcloc.clone()))
+            found_macro(srcloc.clone(), &args)
+                .map(|x| Expr::Quote(Box::new(x.clone()), srcloc.clone()))
         }
 
         Expr::Pair(
