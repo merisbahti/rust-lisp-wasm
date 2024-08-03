@@ -1,3 +1,4 @@
+mod compile_test;
 mod gc_test;
 mod macros_test;
 mod prelude_test;

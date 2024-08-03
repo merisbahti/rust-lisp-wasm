@@ -399,9 +399,10 @@ pub fn prepare_vm(
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
-    let macro_expanded = macro_expand(exprs, &mut macros)?;
+    let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
 
-    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())?;
+    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())
+        .map_err(|err| format!("Got compile err:\n{err}"))?;
 
     let callframe = Callframe {
         ip: 0,

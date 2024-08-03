@@ -1,3 +1,4 @@
+use crate::compile::extract_srcloc;
 use crate::expr::Expr;
 use nom::bytes::complete::{is_not, tag};
 use nom::character::complete::multispace1;
@@ -19,11 +20,11 @@ use std::fmt::Display;
 use std::str;
 type Span<'a> = nom_locate::LocatedSpan<&'a str, Option<&'a str>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SrcLoc {
-    line: u32,
-    offset: usize,
-    file_name: Option<String>,
+    pub line: u32,
+    pub offset: usize,
+    pub file_name: Option<String>,
 }
 
 impl Display for SrcLoc {
@@ -86,11 +87,7 @@ pub fn make_pair_from_vec(v: Vec<Expr>) -> Expr {
         Some((head, tail)) => Expr::Pair(
             Box::new(head.clone()),
             Box::new(make_pair_from_vec(tail.to_vec()).clone()),
-            Some(SrcLoc {
-                line: 13371337,
-                offset: 13371337,
-                file_name: None,
-            }),
+            extract_srcloc(head),
         ),
         None => Expr::Nil,
     }
