@@ -2,8 +2,6 @@ use crate::parse::SrcLoc;
 use crate::vm::Chunk;
 use core::fmt::Debug;
 use core::fmt::Display;
-use core::fmt::Error;
-use nom::lib::std::fmt::Formatter;
 
 #[derive(Clone, Debug)]
 pub struct Num {

@@ -25,7 +25,7 @@ pub fn Stack(props: &StackProps) -> Html {
                 { "empty stack" }
             }
             { props.stack.clone().into_iter().rev().map(|stack_item|
-                html! {<div class="stack-item">{format!("{:?}", stack_item)}</div>}
+                html! {<div class="stack-item">{format!("{}", stack_item)}</div>}
             ).collect::<Html>() }
         </div>
     }
@@ -43,7 +43,7 @@ pub fn Callframes(props: &CallFramesProps) -> Html {
             { props.callframe.chunk.code.clone().into_iter().enumerate().map(|(index,instruction)|
                 {
                     let class = if index == props.callframe.ip { "instruction active" } else { "instruction"};
-                     html! {<div class={class}>{format!("{:?}", instruction)}</div>}
+                     html! {<div class={class}>{format!("{}", instruction)}</div>}
                 }
 
             ).collect::<Html>() }

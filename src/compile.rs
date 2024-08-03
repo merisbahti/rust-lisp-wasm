@@ -148,7 +148,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                             (Expr::Num(Num { value: l, .. }), Expr::Num(Num { value: r, .. })) => {
                                 Ok(Expr::num(l + r))
                             }
-                            _ => Err(format!("Expected numbers, found: {:?} and {:?}", acc, curr)),
+                            _ => Err(format!("Expected numbers, found: {} and {}", acc, curr)),
                         }
                     })
                     .map(|x| x.unwrap_or_else(|| Expr::num(0.0)))
@@ -158,49 +158,49 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             "-".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value - r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "*".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value * r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             ">".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value > r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "<".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value < r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "/".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value / r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "%".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value % r.value)),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
             "^".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf((*r).value))),
-                _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
         (
@@ -211,7 +211,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             "not".to_string(),
             BuiltIn::OneArg(|arg| match arg {
                 Expr::Boolean(arg) => Ok(Expr::bool(!arg.value)),
-                _ => Err(format!("Expected boolean, found: {:?}", arg)),
+                _ => Err(format!("Expected boolean, found: {}", arg)),
             }),
         ),
         (
@@ -222,21 +222,21 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
             "car".to_string(),
             BuiltIn::OneArg(|pair| match pair {
                 Expr::Pair(box l, ..) => Ok(l.clone()),
-                _ => Err(format!("car expected pair, found: {:?}", pair)),
+                _ => Err(format!("car expected pair, found: {}", pair)),
             }),
         ),
         (
             "cdr".to_string(),
             BuiltIn::OneArg(|pair| match pair {
                 Expr::Pair(_, box r, ..) => Ok(r.clone()),
-                _ => Err(format!("cdr expected pair, found: {:?}", pair)),
+                _ => Err(format!("cdr expected pair, found: {}", pair)),
             }),
         ),
         (
             "str-append".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
                 (Expr::String(l, _), Expr::String(r, _)) => Ok(Expr::String(l.clone() + r, None)),
-                _ => Err(format!("Expected strings, found: {:?} and {:?}", l, r)),
+                _ => Err(format!("Expected strings, found: {} and {}", l, r)),
             }),
         ),
         (
@@ -256,7 +256,7 @@ pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, CompileError> {
         }
         Expr::Nil => Ok(vec![]),
         _ => Err(CompileError {
-            message: format!("Invalid keyword list: {:?}", expr),
+            message: format!("Invalid keyword list: {}", expr),
             srcloc: extract_srcloc(expr),
         }),
     }
@@ -286,7 +286,7 @@ fn make_lambda(
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(..), body @ box Expr::Pair(..), ..) => (pairs, body),
-        otherwise => return comp_err!(expr, "Invalid lambda expression: {:?}", otherwise),
+        otherwise => return comp_err!(expr, "Invalid lambda expression: {}", otherwise),
     };
 
     let body = collect_exprs_from_body(unextracted_body)?;
@@ -362,7 +362,7 @@ fn make_define(
         otherwise => {
             return comp_err!(
                 expr,
-                "definition, expected kw and expr but found: {:?}",
+                "definition, expected kw and expr but found: {}",
                 otherwise
             )
         }
@@ -382,7 +382,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -
         otherwise => {
             return comp_err!(
                 expr,
-                "if, expected pred, cons, alt but found: {:?}",
+                "if, expected pred, cons, alt but found: {}",
                 otherwise
             )
         }
@@ -416,7 +416,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -
 fn make_and(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -> CompileResult {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
-        otherwise => return comp_err!(expr, "and, expected two args but found: {:?}", otherwise),
+        otherwise => return comp_err!(expr, "and, expected two args but found: {}", otherwise),
     };
     // l + popjmp(r) + jmp(return) + r + return
     let mut r_chunk = Chunk { code: vec![] };
@@ -435,7 +435,7 @@ fn make_and(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) 
 fn make_or(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -> CompileResult {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
-        otherwise => return comp_err!(expr, "or, expected two args but found: {:?}", otherwise),
+        otherwise => return comp_err!(expr, "or, expected two args but found: {}", otherwise),
     };
     let mut r_chunk = Chunk { code: vec![] };
     compile_internal(r, &mut r_chunk, globals)?;
@@ -457,7 +457,7 @@ pub fn compile_internal(
 ) -> CompileResult {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
-            panic!("Cannot compile a {:?}", expr)
+            panic!("Cannot compile a {}", expr)
         }
         Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "lambda" => {
             make_lambda(r, chunk, globals)?;
@@ -479,10 +479,10 @@ pub fn compile_internal(
             if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
                 chunk.code.push(VMInstruction::Constant(arg.clone()))
             } else {
-                return comp_err!(expr, "quote expects 1 arg, but found: {:?}", exprs);
+                return comp_err!(expr, "quote expects 1 arg, but found: {:#?}", exprs);
             }
         }
-        Expr::Pair(expr @ box Expr::Keyword(kw, srcloc), box r, ..) if kw == "apply" => {
+        Expr::Pair(expr @ box Expr::Keyword(kw, ..), box r, ..) if kw == "apply" => {
             let exprs = collect_exprs_from_body(r)?;
             if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
                 compile_internal(function, chunk, globals)?;
@@ -490,12 +490,7 @@ pub fn compile_internal(
                 chunk.code.push(VMInstruction::Apply);
                 chunk.code.push(VMInstruction::Call(0));
             } else {
-                return comp_err!(
-                    expr,
-                    "at {:?}: apply expects 2 args, but found: {:?}",
-                    srcloc,
-                    exprs
-                );
+                return comp_err!(expr, "apply expects 2 args, but found: {:#?}", exprs);
             }
         }
         Expr::Pair(

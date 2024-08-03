@@ -4,7 +4,7 @@ use crate::{
     macro_expand::macro_expand,
     parse::{make_pair_from_vec, ParseInput},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     compile::{compile_many_exprs, get_globals, BuiltIn},
@@ -25,6 +25,24 @@ pub enum VMInstruction {
     Return,
     Display,
     Constant(Expr),
+}
+
+impl Display for VMInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VMInstruction::Lookup(s) => write!(f, "Lookup({s})"),
+            VMInstruction::Define(s) => write!(f, "Define({s})"),
+            VMInstruction::CondJumpPop(u) => write!(f, "CondJumpPop({u})"),
+            VMInstruction::CondJump(u) => write!(f, "CondJump({u})"),
+            VMInstruction::Call(usize) => write!(f, "Call({usize})"),
+            VMInstruction::Constant(c) => write!(f, "Constant({c})"),
+            VMInstruction::Return => write!(f, "Return"),
+            VMInstruction::Display => write!(f, "Display"),
+            VMInstruction::PopStack => write!(f, "PopStack"),
+            VMInstruction::Apply => write!(f, "Apply"),
+            VMInstruction::MakeLambda => write!(f, "MakeLambda"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -267,19 +285,25 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                         .collect::<Vec<Expr>>();
                     if is_variadic && args.len() < vars.len() {
                         return Err(format!(
-                            "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                            "wrong number of args, expected at least {} ({}), got: ({})",
                             vars.len(),
-                            vars,
-                            args.len()
+                            vars.join(" "),
+                            args.into_iter()
+                                .map(|x| format!("{x}"))
+                                .collect::<Vec<String>>()
+                                .join(" ")
                         ));
                     }
 
                     if !is_variadic && args.len() != vars.len() {
                         return Err(format!(
-                            "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                            "wrong number of args, expected {} ({}), got: ({})",
                             vars.len(),
-                            vars,
-                            args.len()
+                            vars.join(" "),
+                            args.into_iter()
+                                .map(|x| format!("{x}"))
+                                .collect::<Vec<String>>()
+                                .join(" ")
                         ));
                     }
 
@@ -311,8 +335,14 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
                 found => {
                     return Err(format!(
-                        "no function to call on stack, found: {:?}, \nstack:{:?}",
-                        found, vm.stack
+                        "no function to call on stack, found: {}, \nstack: {:?}",
+                        found.map(|x| format!("{x}")).unwrap_or("None".to_string()),
+                        vm.stack
+                            .clone()
+                            .into_iter()
+                            .map(|expr| format!("{expr}"))
+                            .collect::<Vec<_>>()
+                            .join(" ")
                     ))
                 }
             };
@@ -324,8 +354,13 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 (Some(rv), None) => rv,
                 (Some(a), Some(b)) => {
                     return Err(format!(
-                        "expected fn on stack after returning, but found: {a} {b} {:?}",
+                        "expected fn on stack after returning, but found: {a} {b} {}",
                         vm.stack
+                            .clone()
+                            .into_iter()
+                            .map(|x| format!("{x}"))
+                            .collect::<Vec<String>>()
+                            .join(" ")
                     ))
                 }
                 _ => return Err("too few args for return on stack".to_string()),
@@ -459,12 +494,12 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         None,
     )
     .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
-    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {:?}", err))?;
+    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {}", err))?;
 
     if !vm.log.is_empty() {
         return Err(format!(
-            "logs were printed happend while evaluating prelude (failed assertions?): {:?}",
-            vm.log
+            "logs were printed happend while evaluating prelude (failed assertions?):\n{}",
+            vm.log.join("\n")
         ));
     }
 
@@ -685,12 +720,12 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2)"),
-        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 2".to_string())
+        Err("wrong number of args, expected 3 (a b c), got: (1 2)".to_string())
     );
 
     assert_eq!(
         jit_run("((lambda (a b c) (+ (+ a b) c)) 1 2 3 4)"),
-        Err("wrong number of args, expected: 3 ([\"a\", \"b\", \"c\"]), got: 4".to_string())
+        Err("wrong number of args, expected 3 (a b c), got: (1 2 3 4)".to_string())
     );
 
     assert_eq!(

@@ -46,10 +46,13 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             if is_variadic && args.len() < vars.len() {
                 return comp_err!(
                     &macro_definition,
-                    "wrong number of args, expected at least {:?} ({:?}), got: {:?}",
+                    "wrong number of args, expected at least {} ({}), got: ({})",
                     vars.len(),
-                    vars,
-                    args.len()
+                    vars.join(" "),
+                    args.into_iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<String>>()
+                        .join(" ")
                 )
                 .map(|_| Expr::Nil);
             }
@@ -57,10 +60,13 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             if !is_variadic && args.len() != vars.len() {
                 return comp_err!(
                     &macro_definition,
-                    "wrong number of args, expected: {:?} ({:?}), got: {:?}",
+                    "wrong number of args, expected {} ({}), got: ({})",
                     vars.len(),
-                    vars,
-                    args.len()
+                    vars.join(" "),
+                    args.into_iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<String>>()
+                        .join(" ")
                 )
                 .map(|_| Expr::Nil);
             }
