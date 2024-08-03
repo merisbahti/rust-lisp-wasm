@@ -27,7 +27,7 @@ impl Display for CompileError {
                 "{}:{}:{}: {message}",
                 srcloc.file_name.unwrap_or("unknown".to_string()),
                 srcloc.line,
-                srcloc.offset
+                srcloc.column
             )
         } else {
             write!(f, "unknown: {message}")
@@ -71,7 +71,7 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
         Expr::Nil => &Some(SrcLoc {
             line: 13391339,
-            offset: 0,
+            column: 0,
             file_name: None,
         }),
     }

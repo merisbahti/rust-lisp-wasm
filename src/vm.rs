@@ -674,14 +674,14 @@ fn compiled_test() {
     assert_eq!(
         jit_run("(lambda (.) stuff)"),
         Err(
-            "jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (.)"
+            "jit_run_vm:1:10: rest-dot can only occur as second-to-last argument, but found: (.)"
                 .to_string()
         )
     );
 
     assert_eq!(
         jit_run("(lambda (. more extra) stuff)"),
-         Err("jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (. more extra)".to_string())
+         Err("jit_run_vm:1:10: rest-dot can only occur as second-to-last argument, but found: (. more extra)".to_string())
     );
     assert_eq!(
         jit_run("(lambda (. more) stuff)"),

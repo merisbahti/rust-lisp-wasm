@@ -23,7 +23,7 @@ type Span<'a> = nom_locate::LocatedSpan<&'a str, Option<&'a str>>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SrcLoc {
     pub line: u32,
-    pub offset: usize,
+    pub column: usize,
     pub file_name: Option<String>,
 }
 
@@ -34,7 +34,7 @@ impl Display for SrcLoc {
             "{}:{}:{}",
             self.file_name.clone().unwrap_or("unknown".to_string()),
             self.line,
-            self.offset
+            self.column
         )
     }
 }
@@ -44,7 +44,7 @@ fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let pos = position::<Span, VerboseError<Span>>(i)?.1;
     let src_loc = SrcLoc {
         line: pos.location_line(),
-        offset: pos.location_offset(),
+        column: pos.get_column(),
         file_name,
     };
 
@@ -61,7 +61,7 @@ fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let pos = position::<Span, VerboseError<Span>>(i)?.1;
     let src_loc = SrcLoc {
         line: pos.location_line(),
-        offset: pos.location_offset(),
+        column: pos.get_column(),
         file_name,
     };
     map(
@@ -82,7 +82,7 @@ fn parse_keyword(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let file_name = i.extra.map(|x| x.to_string());
     let src_loc = SrcLoc {
         line: pos.location_line(),
-        offset: pos.location_offset(),
+        column: pos.get_column(),
         file_name,
     };
 
@@ -127,7 +127,7 @@ fn parse_pair(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
         let file_name = i.extra.map(|x| x.to_string());
         let src_loc = SrcLoc {
             line: pos.location_line(),
-            offset: pos.location_offset(),
+            column: pos.get_column(),
             file_name,
         };
         results.push((src_loc, expr))
@@ -149,7 +149,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
     let file_name = i.extra.map(|x| x.to_string());
     let src_loc = SrcLoc {
         line: pos.location_line(),
-        offset: pos.location_offset(),
+        column: pos.get_column(),
         file_name: file_name.clone(),
     };
 
@@ -170,7 +170,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     "quote".to_string(),
                     Some(SrcLoc {
                         line: src_loc.line,
-                        offset: src_loc.offset,
+                        column: src_loc.column,
                         file_name: file_name.clone(),
                     }),
                 )),
@@ -179,7 +179,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     Box::new(Expr::Nil),
                     Some(SrcLoc {
                         line: src_loc.line,
-                        offset: src_loc.offset,
+                        column: src_loc.column,
                         file_name: file_name.clone(),
                     }),
                 )),
@@ -332,7 +332,7 @@ fn test_parse_quote() {
             box Expr::Nil,
             Some(SrcLoc {
                 line: 0,
-                offset: 0,
+                column: 0,
                 file_name: None,
             }),
         ),
@@ -464,7 +464,7 @@ fn test_parse_lists() {
                 srcloc:
                     Some(SrcLoc {
                         line: 1,
-                        offset: 1,
+                        column: 2,
                         file_name: None,
                     }),
             }),
