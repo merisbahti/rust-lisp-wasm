@@ -1,5 +1,5 @@
 use crate::expr::Expr;
-use nom::bytes::complete::is_not;
+use nom::bytes::complete::{is_not, tag};
 use nom::character::complete::multispace1;
 use nom::combinator::value;
 use nom::multi::many1;
@@ -28,7 +28,13 @@ pub struct SrcLoc {
 
 impl Display for SrcLoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "srcloc")
+        write!(
+            f,
+            "{}:{}:{}",
+            self.file_name.clone().unwrap_or("unknown".to_string()),
+            self.line,
+            self.offset
+        )
     }
 }
 
@@ -96,11 +102,30 @@ pub fn comment(i: Span) -> IResult<Span, (), VerboseError<Span>> {
         pair(char(';'), many0(is_not("\n\r"))),
     )(i)
 }
-fn parse_list(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
-    map(
-        delimited(char('('), many0(parse_expr), char(')')),
-        make_pair_from_vec,
-    )(i)
+fn parse_pair(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
+    let (mut i, _) = tag("(")(i)?;
+    let mut results: Vec<(SrcLoc, Expr)> = Vec::new();
+    while let Ok((new_s, expr)) = parse_expr(i) {
+        i = new_s;
+        let pos = position::<Span, VerboseError<Span>>(i)?.0;
+        let file_name = i.extra.map(|x| x.to_string());
+        let src_loc = SrcLoc {
+            line: pos.location_line(),
+            offset: pos.location_offset(),
+            file_name,
+        };
+        results.push((src_loc, expr))
+    }
+    let (i, _) = tag(")")(i)?;
+
+    let res =
+        results
+            .into_iter()
+            .rev()
+            .fold(Expr::Nil, |acc: Expr, (loc, expr): (SrcLoc, Expr)| {
+                Expr::Pair(Box::new(expr.clone()), Box::new(acc), Some(loc.clone()))
+            });
+    Ok((i, res))
 }
 
 fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
@@ -117,7 +142,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
             char('\''),
             alt((
                 parse_quote,
-                parse_list,
+                parse_pair,
                 parse_number,
                 parse_string,
                 parse_keyword,
@@ -129,7 +154,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     "quote".to_string(),
                     Some(SrcLoc {
                         line: src_loc.line,
-                        offset: src_loc.offset + "(".len(),
+                        offset: src_loc.offset,
                         file_name: file_name.clone(),
                     }),
                 )),
@@ -138,7 +163,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                     Box::new(Expr::Nil),
                     Some(SrcLoc {
                         line: src_loc.line,
-                        offset: src_loc.offset + "(quote".len(),
+                        offset: src_loc.offset,
                         file_name: file_name.clone(),
                     }),
                 )),
@@ -153,7 +178,7 @@ fn parse_expr(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
         many0(alt((comment, value((), multispace1)))),
         alt((
             parse_quote,
-            parse_list,
+            parse_pair,
             parse_number,
             parse_string,
             parse_keyword,
