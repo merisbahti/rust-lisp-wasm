@@ -1,5 +1,5 @@
 use crate::compile::extract_srcloc;
-use crate::expr::Expr;
+use crate::expr::{Expr, Num};
 use nom::bytes::complete::{is_not, tag};
 use nom::character::complete::multispace1;
 use nom::combinator::value;
@@ -40,7 +40,20 @@ impl Display for SrcLoc {
 }
 
 fn parse_number(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
-    map(double, Expr::Num)(i)
+    let file_name = i.extra.map(|x| x.to_string());
+    let pos = position::<Span, VerboseError<Span>>(i)?.1;
+    let src_loc = SrcLoc {
+        line: pos.location_line(),
+        offset: pos.location_offset(),
+        file_name,
+    };
+
+    map(double, move |val| {
+        Expr::Num(Num {
+            value: val,
+            srcloc: Some(src_loc.clone()),
+        })
+    })(i)
 }
 
 fn parse_string(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
@@ -75,8 +88,14 @@ fn parse_keyword(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
 
     map(many1(is_not(";\n\r )(")), move |char_vec| {
         match char_vec.into_iter().map(|x: Span| *x.fragment()).collect() {
-            str if str == "true" => Expr::Boolean(true),
-            str if str == "false" => Expr::Boolean(false),
+            str if str == "true" => Expr::Boolean(crate::expr::Bool {
+                value: true,
+                srcloc: Some(src_loc.clone()),
+            }),
+            str if str == "false" => Expr::Boolean(crate::expr::Bool {
+                value: false,
+                srcloc: Some(src_loc.clone()),
+            }),
             str => Expr::Keyword(str, Some(src_loc.clone())),
         }
     })(i)
@@ -205,7 +224,7 @@ fn test_parse_alphanumerics() {
         Ok(vec![Expr::Keyword(string.to_string(), None)])
     }
     fn nr(nr: f64) -> Result<Vec<Expr>, String> {
-        Ok(vec![Expr::Num(nr)])
+        Ok(vec![Expr::num(nr)])
     }
 
     assert_eq!(
@@ -213,14 +232,14 @@ fn test_parse_alphanumerics() {
             source: "true",
             file_name: None
         }),
-        Ok(vec![Expr::Boolean(true)])
+        Ok(vec![Expr::bool(true)])
     );
     assert_eq!(
         parse(&ParseInput {
             source: "false",
             file_name: None
         }),
-        Ok(vec![Expr::Boolean(false)])
+        Ok(vec![Expr::bool(false)])
     );
     assert_eq!(
         parse(&ParseInput {
@@ -273,14 +292,14 @@ fn test_parse_alphanumerics() {
             source: "  true  ",
             file_name: None
         }),
-        Ok(vec![Expr::Boolean(true)])
+        Ok(vec![Expr::bool(true)])
     );
     assert_eq!(
         parse(&ParseInput {
             source: "  false  ",
             file_name: None
         }),
-        Ok(vec![Expr::Boolean(false)])
+        Ok(vec![Expr::bool(false)])
     );
     assert_eq!(
         parse(&ParseInput {
@@ -439,7 +458,19 @@ fn test_parse_lists() {
             file_name: None
         })
         .map(|x| x.split_first().map(|x| x.0.clone())),
-        Ok(Some(Expr::Pair(box Expr::Num(123.), box Expr::Nil, ..)))
+        Ok(Some(Expr::Pair(
+            box Expr::Num(Num {
+                value: 123.0,
+                srcloc:
+                    Some(SrcLoc {
+                        line: 1,
+                        offset: 1,
+                        file_name: None,
+                    }),
+            }),
+            box Expr::Nil,
+            ..,
+        )))
     );
     assert_eq!(
         parse(&ParseInput {
@@ -448,9 +479,9 @@ fn test_parse_lists() {
         }),
         Ok(vec![make_pair_from_vec(vec![
             Expr::Keyword("a".to_string(), None),
-            Expr::Num(1.),
+            Expr::num(1.),
             Expr::Keyword("b".to_string(), None),
-            Expr::Num(2.)
+            Expr::num(2.)
         ])])
     );
     assert_eq!(
@@ -466,7 +497,7 @@ fn test_parse_lists() {
                 Expr::Keyword("wii".to_string(), None)
             )),
             Expr::Keyword("b".to_string(), None),
-            Expr::Num(2.)
+            Expr::num(2.)
         ])])
     );
 }

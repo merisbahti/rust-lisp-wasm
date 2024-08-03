@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, collections::HashMap, fmt::Display, sync::Arc};
 
 use crate::{
-    expr::Expr,
+    expr::{Bool, Expr, Num},
     parse::SrcLoc,
     vm::{Chunk, VMInstruction},
 };
@@ -65,8 +65,8 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Pair(_, _, s) => s,
         Expr::String(_, s) => s,
         Expr::Quote(_, s) => s,
-        Expr::Num(_) => todo!("Not implemented src_loc for this num."),
-        Expr::Boolean(_) => todo!("Not implemented src_loc for this bool."),
+        Expr::Num(Num { srcloc: s, .. }) => s,
+        Expr::Boolean(Bool { srcloc: s, .. }) => s,
         Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
         Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
         Expr::Nil => todo!(),
@@ -81,57 +81,57 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         (
             "nil?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Nil => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Nil => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "pair?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Nil | Expr::Pair(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Nil | Expr::Pair(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "number?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Num(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Num(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "boolean?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Boolean(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Boolean(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "string?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::String(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::String(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "abs".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Num(nr) => Ok(Expr::Num(nr.abs())),
+                Expr::Num(nr) => Ok(Expr::num(nr.value.abs())),
                 other => Err(format!("abs: expected num but found: {other}")),
             }),
         ),
         (
             "function?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Lambda(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Lambda(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
             "symbol?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
-                Expr::Keyword(..) => Ok(Expr::Boolean(true)),
-                _ => Ok(Expr::Boolean(false)),
+                Expr::Keyword(..) => Ok(Expr::bool(true)),
+                _ => Ok(Expr::bool(false)),
             }),
         ),
         (
@@ -141,70 +141,72 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
                     .into_iter()
                     .try_reduce::<Result<Expr, String>>(|acc, curr| {
                         match (acc.clone(), curr.clone()) {
-                            (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l + r)),
+                            (Expr::Num(Num { value: l, .. }), Expr::Num(Num { value: r, .. })) => {
+                                Ok(Expr::num(l + r))
+                            }
                             _ => Err(format!("Expected numbers, found: {:?} and {:?}", acc, curr)),
                         }
                     })
-                    .map(|x| x.unwrap_or_else(|| Expr::Num(0.0)))
+                    .map(|x| x.unwrap_or_else(|| Expr::num(0.0)))
             }),
         ),
         (
             "-".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l - r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value - r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "*".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l * r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value * r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             ">".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Boolean(l > r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value > r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "<".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Boolean(l < r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::bool(l.value < r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "/".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l / r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value / r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "%".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l % r)),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value % r.value)),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "^".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::Num(l.powf(*r))),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf((*r).value))),
                 _ => Err(format!("Expected numbers, found: {:?} and {:?}", l, r)),
             }),
         ),
         (
             "=".to_string(),
-            BuiltIn::TwoArg(|l, r| Ok(Expr::Boolean(l == r))),
+            BuiltIn::TwoArg(|l, r| Ok(Expr::bool(l == r))),
         ),
         (
             "not".to_string(),
             BuiltIn::OneArg(|arg| match arg {
-                Expr::Boolean(arg) => Ok(Expr::Boolean(!arg)),
+                Expr::Boolean(arg) => Ok(Expr::bool(!arg.value)),
                 _ => Err(format!("Expected boolean, found: {:?}", arg)),
             }),
         ),
@@ -401,9 +403,7 @@ fn make_if(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) -
 
     chunk.code.extend_from_slice(&alt_chunk.code);
 
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk.code.push(VMInstruction::Constant(Expr::bool(true)));
     chunk.code.push(VMInstruction::CondJumpPop(end_ip));
     chunk.code.extend_from_slice(&cons_chunk.code);
     Ok(())
@@ -419,9 +419,7 @@ fn make_and(expr: &Expr, chunk: &mut Chunk, globals: &HashMap<String, BuiltIn>) 
     compile_internal(r, &mut r_chunk, globals)?;
     compile_internal(l, chunk, globals)?;
     chunk.code.push(VMInstruction::CondJump(2));
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::Boolean(true)));
+    chunk.code.push(VMInstruction::Constant(Expr::bool(true)));
     chunk
         .code
         .push(VMInstruction::CondJumpPop(1 + r_chunk.code.len()));

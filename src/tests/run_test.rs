@@ -8,7 +8,7 @@ fn many_tests() {
         (apply + a)            
         ",
         ),
-        Ok(crate::expr::Expr::Num(10.0))
+        Ok(crate::expr::Expr::num(10.0))
     );
 
     assert_eq!(
@@ -19,7 +19,7 @@ fn many_tests() {
         (apply fn a)            
         ",
         ),
-        Ok(crate::expr::Expr::Num(3.0))
+        Ok(crate::expr::Expr::num(3.0))
     );
 
     assert_eq!(
@@ -31,7 +31,7 @@ fn many_tests() {
         (apply fn a)            
         ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
@@ -42,7 +42,7 @@ fn many_tests() {
         (apply (lambda (a b) (+ a b someval)) a)            
         ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
@@ -53,7 +53,7 @@ fn many_tests() {
         (apply (lambda (a b) (+ a b someval)) a)            
         ",
         ),
-        Ok(crate::expr::Expr::Num(13.0))
+        Ok(crate::expr::Expr::num(13.0))
     );
 
     assert_eq!(
@@ -62,7 +62,7 @@ fn many_tests() {
         (apply (lambda (a b) b) '(0 15))            
         ",
         ),
-        Ok(crate::expr::Expr::Num(15.0))
+        Ok(crate::expr::Expr::num(15.0))
     );
 
     assert_eq!(
@@ -71,6 +71,6 @@ fn many_tests() {
         (apply (lambda (a b) a) '(0 15))            
         ",
         ),
-        Ok(crate::expr::Expr::Num(0.0))
+        Ok(crate::expr::Expr::num(0.0))
     );
 }

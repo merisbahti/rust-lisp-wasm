@@ -1,8 +1,8 @@
 use crate::{
     compile::{collect_exprs_from_body, MacroFn},
+    expr::{Bool, Num},
     macro_expand::macro_expand,
-    parse::make_pair_from_vec,
-    parse::ParseInput,
+    parse::{make_pair_from_vec, ParseInput},
 };
 use std::collections::HashMap;
 
@@ -95,7 +95,9 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             };
             match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => (),
+                Expr::Boolean(Bool { value: false, .. })
+                | Expr::Nil
+                | Expr::Num(Num { value: 0.0, .. }) => (),
                 _ => callframe.ip += *instruction,
             }
         }
@@ -107,7 +109,9 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
             };
             match pred {
-                Expr::Boolean(false) | Expr::Nil | Expr::Num(0.0) => (),
+                Expr::Boolean(Bool { value: false, .. })
+                | Expr::Nil
+                | Expr::Num(Num { value: 0.0, .. }) => (),
                 _ => callframe.ip += *instruction,
             }
         }
@@ -347,8 +351,8 @@ fn test_add() {
     let chunk = Chunk {
         code: vec![
             VMInstruction::Constant(Expr::Keyword("+".to_string(), None)),
-            VMInstruction::Constant(Expr::Num(1.0)),
-            VMInstruction::Constant(Expr::Num(2.0)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
             VMInstruction::Call(2),
             VMInstruction::Return,
         ],
@@ -365,7 +369,7 @@ fn test_add() {
 
     assert!(run(&mut vm, &get_globals()).is_ok());
 
-    debug_assert_eq!(vm.stack, vec![Expr::Num(3.0)])
+    debug_assert_eq!(vm.stack, vec![Expr::num(3.0)])
 }
 
 pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
@@ -476,15 +480,15 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
 #[test]
 fn compiled_test() {
     let res = jit_run("(+ 1 2)");
-    assert_eq!(res, Ok(Expr::Num(3.0)));
+    assert_eq!(res, Ok(Expr::num(3.0)));
     let res = jit_run("(+ 1 (+ 2 3))");
-    assert_eq!(res, Ok(Expr::Num(6.0)));
+    assert_eq!(res, Ok(Expr::num(6.0)));
     let res = jit_run("(+ (+ 2 3) 1)");
-    assert_eq!(res, Ok(Expr::Num(6.0)));
+    assert_eq!(res, Ok(Expr::num(6.0)));
     let res = jit_run("((lambda () 1))");
-    assert_eq!(res, Ok(Expr::Num(1.0)));
+    assert_eq!(res, Ok(Expr::num(1.0)));
     let res = jit_run("((lambda (a b) (+ a (+ b b))) 1 2)");
-    assert_eq!(res, Ok(Expr::Num(5.0)));
+    assert_eq!(res, Ok(Expr::num(5.0)));
 
     assert_eq!(
         jit_run(
@@ -494,7 +498,7 @@ fn compiled_test() {
 (+ x y)
         "
         ),
-        Ok(Expr::Num(3.0))
+        Ok(Expr::num(3.0))
     );
 
     assert_eq!(
@@ -508,7 +512,7 @@ fn compiled_test() {
 (fn)
         "
         ),
-        Ok(Expr::Num(12.0))
+        Ok(Expr::num(12.0))
     );
 
     assert_eq!(
@@ -522,7 +526,7 @@ fn compiled_test() {
 (fn)
         "
         ),
-        Ok(Expr::Num(12.0))
+        Ok(Expr::num(12.0))
     );
 
     assert_eq!(
@@ -547,7 +551,7 @@ fn compiled_test() {
 (if 1 2 3)
 "
         ),
-        Ok(Expr::Num(2.0))
+        Ok(Expr::num(2.0))
     );
 
     assert_eq!(
@@ -556,7 +560,7 @@ fn compiled_test() {
 (if (+ 0 0) 2 3)
 "
         ),
-        Ok(Expr::Num(3.0))
+        Ok(Expr::num(3.0))
     );
 
     assert_eq!(
@@ -566,7 +570,7 @@ fn compiled_test() {
 (if (f 3 -3) 2 10)
 "
         ),
-        Ok(Expr::Num(10.0))
+        Ok(Expr::num(10.0))
     );
     assert_eq!(
         jit_run(
@@ -577,10 +581,10 @@ fn compiled_test() {
     
 (f 10)"
         ),
-        Ok(Expr::Num(0.0))
+        Ok(Expr::num(0.0))
     );
-    assert_eq!(jit_run("(= 1 1)"), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(= 1 10)"), Ok(Expr::Boolean(false)));
+    assert_eq!(jit_run("(= 1 1)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(= 1 10)"), Ok(Expr::bool(false)));
 
     assert_eq!(
         jit_run(
@@ -593,7 +597,7 @@ fn compiled_test() {
   (fib-iter (+ a b) a (+ count -1)))))
 (fib 90)"
         ),
-        Ok(Expr::Num(2.880067194370816e18))
+        Ok(Expr::num(2.880067194370816e18))
     );
 
     assert_eq!(
@@ -608,7 +612,7 @@ fn compiled_test() {
   
 (fib 10)"
         ),
-        Ok(Expr::Num(89.0))
+        Ok(Expr::num(89.0))
     );
 
     assert_eq!(
@@ -622,20 +626,20 @@ fn compiled_test() {
 (map (lambda (x) (+ 1 x)) '(1 2 3))"
         ),
         Ok(parse::make_pair_from_vec(vec![
-            Expr::Num(2.0),
-            Expr::Num(3.0),
-            Expr::Num(4.0)
+            Expr::num(2.0),
+            Expr::num(3.0),
+            Expr::num(4.0)
         ]))
     );
 
-    assert_eq!(jit_run("(and true true)"), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(and false true)"), Ok(Expr::Boolean(false)));
-    assert_eq!(jit_run("(and true false)"), Ok(Expr::Boolean(false)));
-    assert_eq!(jit_run("(and false false)"), Ok(Expr::Boolean(false)));
-    assert_eq!(jit_run("(or true true)"), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(or false true)"), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(or true false)"), Ok(Expr::Boolean(true)));
-    assert_eq!(jit_run("(or false false)"), Ok(Expr::Boolean(false)));
+    assert_eq!(jit_run("(and true true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(and false true)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(and true false)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(and false false)"), Ok(Expr::bool(false)));
+    assert_eq!(jit_run("(or true true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or false true)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or true false)"), Ok(Expr::bool(true)));
+    assert_eq!(jit_run("(or false false)"), Ok(Expr::bool(false)));
 
     assert_eq!(
         jit_run("(lambda (.) stuff)"),
@@ -689,22 +693,22 @@ fn compiled_test() {
     assert_eq!(
         jit_run("((lambda (. more) more) 1 2 3 4 5)"),
         Ok(parse::make_pair_from_vec(vec![
-            Expr::Num(1.0),
-            Expr::Num(2.0),
-            Expr::Num(3.0),
-            Expr::Num(4.0),
-            Expr::Num(5.0)
+            Expr::num(1.0),
+            Expr::num(2.0),
+            Expr::num(3.0),
+            Expr::num(4.0),
+            Expr::num(5.0)
         ]))
     );
 
-    assert_eq!(jit_run("(defmacro (m) 10) (m)"), Ok(Expr::Num(10.0),));
+    assert_eq!(jit_run("(defmacro (m) 10) (m)"), Ok(Expr::num(10.0),));
     assert_eq!(
         jit_run("(defmacro (m a) (cons '+ (cons 1 (cons 2 '())))) (m 2)"),
-        Ok(Expr::Num(3.0),)
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
         jit_run("(defmacro (m a) (cons '+ (cons a (cons 2 '())))) (m 1)"),
-        Ok(Expr::Num(3.0),)
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
         jit_run(
@@ -722,7 +726,7 @@ fn compiled_test() {
                 
            ",
         ),
-        Ok(Expr::Num(11.0))
+        Ok(Expr::num(11.0))
     );
 
     assert_eq!(
@@ -770,7 +774,7 @@ fn compiled_test() {
             (add 1 2)
             "
         ),
-        Ok(Expr::Num(3.0),)
+        Ok(Expr::num(3.0),)
     );
     assert_eq!(
         jit_run(
@@ -790,7 +794,7 @@ fn compiled_test() {
             (add 1 2 3 4 5)
             "
         ),
-        Ok(Expr::Num(15.0),)
+        Ok(Expr::num(15.0),)
     );
 
     assert_eq!(
@@ -809,18 +813,18 @@ fn compiled_test() {
             (add 1 2 3)
 "
         ),
-        Ok(Expr::Num(6.0))
+        Ok(Expr::num(6.0))
     );
 
     let example_str = r#"(map (lambda (x) (string? x)) '("hello" (str-append (str-append "hello" " ") "world") 1 2 3))"#;
     assert_eq!(
         jit_run(example_str),
         Ok(make_pair_from_vec(vec![
-            Expr::Boolean(true),
-            Expr::Boolean(false),
-            Expr::Boolean(false),
-            Expr::Boolean(false),
-            Expr::Boolean(false)
+            Expr::bool(true),
+            Expr::bool(false),
+            Expr::bool(false),
+            Expr::bool(false),
+            Expr::bool(false)
         ]))
     );
 }

@@ -13,8 +13,8 @@ fn test_simple_add_compilation() {
     match compile_internal(
         &crate::parse::make_pair_from_vec(vec![
             Expr::Keyword("+".to_string(), None),
-            Expr::Num(1.0, None),
-            Expr::Num(2.0, None),
+            Expr::num(1.0),
+            Expr::num(2.0),
         ]),
         &mut initial_chunk,
         &get_globals(),
@@ -27,8 +27,8 @@ fn test_simple_add_compilation() {
         Chunk {
             code: vec![
                 VMInstruction::Lookup("+".to_string()),
-                VMInstruction::Constant(Expr::Num(1.0, None)),
-                VMInstruction::Constant(Expr::Num(2.0, None)),
+                VMInstruction::Constant(Expr::num(1.0)),
+                VMInstruction::Constant(Expr::num(2.0)),
                 VMInstruction::Call(2),
             ],
         }
@@ -57,8 +57,8 @@ fn losta_compile() {
         parse_and_compile("(+ 1 2)"),
         vec![
             VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0, None)),
-            VMInstruction::Constant(Expr::Num(2.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
             VMInstruction::Call(2),
         ]
     );
@@ -73,9 +73,9 @@ fn losta_compile() {
         .map(|x| x.0.callframes.get(0).map(|x| x.chunk.code.clone()).unwrap()),
         Ok(vec![
             VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0, None)),
-            VMInstruction::Constant(Expr::Num(2.0, None)),
-            VMInstruction::Constant(Expr::Num(3.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
+            VMInstruction::Constant(Expr::num(3.0)),
             VMInstruction::Call(3),
             VMInstruction::Return,
         ])
@@ -87,9 +87,9 @@ fn losta_compile() {
             VMInstruction::Lookup("get".to_string()),
             VMInstruction::Lookup("add".to_string()),
             VMInstruction::Call(1),
-            VMInstruction::Constant(Expr::Num(1.0, None)),
-            VMInstruction::Constant(Expr::Num(2.0, None)),
-            VMInstruction::Constant(Expr::Num(3.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
+            VMInstruction::Constant(Expr::num(3.0)),
             VMInstruction::Call(3),
         ]
     );
@@ -101,10 +101,10 @@ fn losta_compile() {
             VMInstruction::Lookup("add".to_string()),
             VMInstruction::Call(1),
             VMInstruction::Lookup("+".to_string()),
-            VMInstruction::Constant(Expr::Num(1.0, None)),
-            VMInstruction::Constant(Expr::Num(2.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
+            VMInstruction::Constant(Expr::num(2.0)),
             VMInstruction::Call(2),
-            VMInstruction::Constant(Expr::Num(3.0, None)),
+            VMInstruction::Constant(Expr::num(3.0)),
             VMInstruction::Call(2),
         ]
     );
@@ -127,7 +127,7 @@ fn losta_compile() {
             VMInstruction::Constant(Expr::LambdaDefinition(
                 Chunk {
                     code: vec![
-                        VMInstruction::Constant(Expr::Num(1.0, None)),
+                        VMInstruction::Constant(Expr::num(1.0)),
                         VMInstruction::Return
                     ],
                 },
@@ -141,7 +141,7 @@ fn losta_compile() {
     assert_eq!(
         parse_and_compile("(define a 1)"),
         vec![
-            VMInstruction::Constant(Expr::Num(1.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
             VMInstruction::Define("a".to_string()),
             VMInstruction::Constant(Expr::Nil),
         ]
@@ -169,12 +169,12 @@ fn lambda_compile_test() {
     assert_eq!(
         parse_and_compile("(if 1 2 3)").code,
         vec![
-            VMInstruction::Constant(Expr::Num(1.0, None)),
+            VMInstruction::Constant(Expr::num(1.0)),
             VMInstruction::CondJumpPop(3),
-            VMInstruction::Constant(Expr::Num(3.0, None)),
-            VMInstruction::Constant(Expr::Boolean(true, None)),
+            VMInstruction::Constant(Expr::num(3.0)),
+            VMInstruction::Constant(Expr::bool(true)),
             VMInstruction::CondJumpPop(1),
-            VMInstruction::Constant(Expr::Num(2.0, None)),
+            VMInstruction::Constant(Expr::num(2.0)),
         ]
     );
     assert_eq!(
@@ -184,7 +184,7 @@ fn lambda_compile_test() {
                 VMInstruction::Constant(Expr::LambdaDefinition(
                     Chunk {
                         code: vec![
-                            VMInstruction::Constant(Expr::Num(1.0, None)),
+                            VMInstruction::Constant(Expr::num(1.0)),
                             VMInstruction::Return
                         ],
                     },
@@ -203,7 +203,7 @@ fn lambda_compile_test() {
                 VMInstruction::Constant(Expr::LambdaDefinition(
                     Chunk {
                         code: vec![
-                            VMInstruction::Constant(Expr::Num(1.0)),
+                            VMInstruction::Constant(Expr::num(1.0)),
                             VMInstruction::Return
                         ],
                     },

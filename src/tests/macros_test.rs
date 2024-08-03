@@ -11,7 +11,7 @@ fn test_call_other_macro_from_macro() {
             (add)
             "
         ),
-        Ok(Expr::Num(3.0))
+        Ok(Expr::num(3.0))
     );
 
     assert_eq!(
@@ -21,7 +21,7 @@ fn test_call_other_macro_from_macro() {
             (defmacro (add) (cons '+ (cons (three) (cons (three) '())))) (add)
             "
         ),
-        Ok(Expr::Num(6.0))
+        Ok(Expr::num(6.0))
     );
     assert_eq!(
         jit_run(
@@ -31,7 +31,7 @@ fn test_call_other_macro_from_macro() {
             (add)
             "
         ),
-        Ok(Expr::Num(10.0))
+        Ok(Expr::num(10.0))
     )
 }
 

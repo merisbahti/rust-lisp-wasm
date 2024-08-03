@@ -289,13 +289,13 @@ fn expansion_test() {
         (defmacro (compile-time-add a b) (+ a b))
         (compile-time-add 5 2)
         ",
-        &Expr::Num(7.0),
+        &Expr::num(7.0),
     );
     noop_test(
         "
         (defmacro (compile-time-add a b) (+ a b))
         (compile-time-add (compile-time-add 1 2) 2)
         ",
-        &Expr::Num(5.0),
+        &Expr::num(5.0),
     );
 }
