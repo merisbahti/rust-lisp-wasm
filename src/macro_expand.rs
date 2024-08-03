@@ -31,8 +31,8 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                 if dot_index + 2 != all_kws.len() {
                     return comp_err!(
                         &macro_definition,
-                        "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                        all_kws
+                        "rest-dot can only occur as second-to-last argument, but found: ({})",
+                        all_kws.join(" ")
                     )
                     .map(|_| Expr::Nil);
                 }

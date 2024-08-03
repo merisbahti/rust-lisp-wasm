@@ -57,27 +57,27 @@ impl Display for Expr {
     ) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Expr::Nil => write!(formatter, "'()"),
-            Expr::Pair(x, box Expr::Nil, ..) => write!(formatter, "({x:?})"),
+            Expr::Pair(x, box Expr::Nil, ..) => write!(formatter, "({x})"),
             Expr::Pair(x, r @ box Expr::Pair(..), ..) => {
                 let mut r_string = format!("{r}");
                 // remove parens for niceness
                 r_string.pop();
                 r_string.remove(0);
-                write!(formatter, "({x:?} {r_string})")
+                write!(formatter, "({x} {r_string})")
             }
-            Expr::Pair(x, y, ..) => write!(formatter, "({x:?} . {y:?})"),
+            Expr::Pair(x, y, ..) => write!(formatter, "({x} . {y})"),
             Expr::Num(Num { value: x, .. }) => {
-                let mut string_value = format!("{:#?}", x);
+                let mut string_value = format!("{}", x);
                 if string_value.ends_with(".0") {
                     string_value.pop();
                     string_value.pop();
                     write!(formatter, "{}", string_value)
                 } else {
-                    write!(formatter, "{:#?}", x)
+                    write!(formatter, "{}", x)
                 }
             }
             Expr::Keyword(x, ..) => write!(formatter, "{x}"),
-            Expr::Boolean(Bool { value: x, .. }) => write!(formatter, "{x:?}"),
+            Expr::Boolean(Bool { value: x, .. }) => write!(formatter, "{x}"),
             Expr::Quote(xs, _) => write!(formatter, "'{xs:?}"),
             Expr::Lambda(..) => {
                 write!(formatter, "Lambda(...)")

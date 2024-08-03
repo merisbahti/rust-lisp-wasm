@@ -81,7 +81,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
     match instruction {
         VMInstruction::Display => {
             if let Some(top) = vm.stack.pop() {
-                vm.log.push(top.to_string());
+                vm.log.push(format!("{}", top));
                 vm.stack.push(Expr::Nil);
             } else {
                 return Err("no value to display on stack, compiler bug!".to_string());
@@ -406,7 +406,7 @@ pub fn prepare_vm(
     let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
 
     compile_many_exprs(macro_expanded, &mut chunk, &get_globals())
-        .map_err(|err| format!("Got compile err:\n{err}"))?;
+        .map_err(|err| format!("{err}"))?;
 
     let callframe = Callframe {
         ip: 0,
@@ -643,12 +643,15 @@ fn compiled_test() {
 
     assert_eq!(
         jit_run("(lambda (.) stuff)"),
-        Err("rest-dot can only occur as second-to-last argument, but found: [\".\"]".to_string())
+        Err(
+            "jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (.)"
+                .to_string()
+        )
     );
 
     assert_eq!(
         jit_run("(lambda (. more extra) stuff)"),
-        Err("rest-dot can only occur as second-to-last argument, but found: [\".\", \"more\", \"extra\"]".to_string())
+         Err("jit_run_vm:1:9: rest-dot can only occur as second-to-last argument, but found: (. more extra)".to_string())
     );
     assert_eq!(
         jit_run("(lambda (. more) stuff)"),

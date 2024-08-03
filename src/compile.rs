@@ -24,7 +24,7 @@ impl Display for CompileError {
         if let Some(srcloc) = self.srcloc.clone() {
             write!(
                 f,
-                "{}:{}:{}: {message} ",
+                "{}:{}:{}: {message}",
                 srcloc.file_name.unwrap_or("unknown".to_string()),
                 srcloc.line,
                 srcloc.offset
@@ -69,7 +69,11 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Boolean(Bool { srcloc: s, .. }) => s,
         Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
         Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
-        Expr::Nil => todo!(),
+        Expr::Nil => &Some(SrcLoc {
+            line: 13391339,
+            offset: 0,
+            file_name: None,
+        }),
     }
     .clone()
 }
@@ -237,7 +241,7 @@ pub fn get_globals() -> HashMap<String, BuiltIn> {
         ),
         (
             "to-string".to_string(),
-            BuiltIn::OneArg(|expr| Ok(Expr::String(expr.to_string(), None))),
+            BuiltIn::OneArg(|expr| Ok(Expr::String(format!("{expr}"), None))),
         ),
     ])
 }
@@ -302,8 +306,8 @@ fn make_lambda(
         if dot_index + 2 != all_kws.len() {
             return comp_err!(
                 expr,
-                "rest-dot can only occur as second-to-last argument, but found: {:?}",
-                all_kws
+                "rest-dot can only occur as second-to-last argument, but found: ({})",
+                all_kws.join(" ")
             );
         }
     };
