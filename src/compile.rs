@@ -490,7 +490,7 @@ pub fn compile_internal(
                 chunk.code.push(VMInstruction::Apply);
                 chunk.code.push(VMInstruction::Call(0));
             } else {
-                return comp_err!(expr, "apply expects 2 args, but found: {:#?}", exprs);
+                return comp_err!(expr, "apply expects 2 args, but found: {}", exprs.len());
             }
         }
         Expr::Pair(

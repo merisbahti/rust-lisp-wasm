@@ -170,12 +170,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
                     (instructions, variadic, kws)
                 }
-                stuff => {
-                    return Err(format!(
-                        "expected lambda definition, but found: {:?}",
-                        stuff
-                    ))
-                }
+                stuff => return Err(format!("expected lambda definition, but found: {stuff:#?}",)),
             };
             vm.stack
                 .push(Expr::Lambda(instructions, kws, variadic, definition_env));
@@ -335,7 +330,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 }
                 found => {
                     return Err(format!(
-                        "no function to call on stack, found: {}, \nstack: {:?}",
+                        "no function to call on stack, found: {}, \nstack: {}",
                         found.map(|x| format!("{x}")).unwrap_or("None".to_string()),
                         vm.stack
                             .clone()
@@ -493,7 +488,7 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         },
         None,
     )
-    .map_err(|err| format!("Error when compiling prelude: {:?}", err))?;
+    .map_err(|err| format!("Error when compiling prelude: {}", err))?;
     run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {}", err))?;
 
     if !vm.log.is_empty() {
