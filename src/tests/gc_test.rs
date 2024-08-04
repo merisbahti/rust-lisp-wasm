@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::{
-    compile::get_globals,
+    compile::get_builtins,
     expr::Expr,
     vm::{get_prelude, prepare_vm, step},
 };
@@ -71,7 +71,7 @@ fn gc_test() {
 (assert (length (queens 4)) 10)
         ";
 
-    let globals = &get_globals();
+    let globals = &get_builtins();
     let prelude = get_prelude();
     let (mut vm, _) = prelude
         .and_then(|env| {

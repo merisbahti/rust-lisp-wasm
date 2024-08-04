@@ -7,7 +7,7 @@ use crate::{
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    compile::{compile_many_exprs, get_globals, BuiltIn},
+    compile::{compile_many_exprs, get_builtins, BuiltIn},
     expr::Expr,
     parse,
 };
@@ -51,18 +51,20 @@ pub struct Env {
     pub parent: Option<String>,
 }
 
+pub type HeapAddr = String;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Callframe {
     pub ip: usize,
     pub chunk: Chunk,
-    pub env: String,
+    pub env_addr_mapping: HashMap<String, HeapAddr>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
-    pub envs: HashMap<String, Env>,
+    pub env: HashMap<HeapAddr, Expr>,
     pub log: Vec<String>,
 }
 
@@ -84,7 +86,7 @@ pub fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String
 pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
     // let callframes = &mut vm.callframes;
     // let len = callframes.len();
-    let envs = &mut vm.envs;
+    let env = &mut vm.env;
     let callframe = match vm.callframes.last_mut() {
         Some(x) => x,
         _ => return Err("no callframes".to_string()),
@@ -165,6 +167,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             ));
         }
         VMInstruction::MakeLambda => {
+            // give heap-addresses to closed over variables?
             let definition_env = callframe.env.clone();
             let (instructions, variadic, kws) = match vm.stack.pop() {
                 Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
@@ -180,46 +183,34 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 Some(to_define) => to_define,
                 None => return Err("no value to define".to_string()),
             };
-
-            let env = match envs.get_mut(&callframe.env) {
-                Some(env) => env,
-                _ => return Err("env missing for callframe".to_string()),
-            };
-            env.map.insert(name.clone(), definee);
+            if let Some(addr_to_define) = callframe.env_addr_mapping.get(name) {
+                // should only be defined once?
+                if env.contains_key(addr_to_define) {
+                    return Err("heap-addr already defined".to_string());
+                }
+                env.insert(addr_to_define.clone(), definee);
+            } else {
+                return Err("heap-addr to define didn't exist, compilation error?".to_string());
+            }
         }
         VMInstruction::Lookup(name) => {
-            fn lookup_env(
-                name: String,
-                env_name: String,
-                envs: &HashMap<String, Env>,
-                globals: &HashMap<String, BuiltIn>,
-            ) -> Option<Expr> {
-                let env = match envs.get(&env_name) {
-                    Some(env) => env,
-                    None => panic!("env not found for callframe!!!"),
-                };
-                let parent = env.parent.clone();
-                env.map
-                    .get(&name)
-                    .cloned()
-                    .or_else(|| match parent {
-                        Some(parent_name) => lookup_env(name.clone(), parent_name, envs, globals),
-                        None => None,
-                    })
-                    .or_else(|| {
-                        globals
-                            .get(&name)
-                            .map(|_| Expr::Keyword(name.clone(), None))
-                    })
-            }
-
-            match lookup_env(name.to_string(), callframe.env.clone(), envs, globals) {
-                Some(instructions) => {
-                    vm.stack.push(instructions.clone());
-                    return Ok(());
+            let heap_addr = match callframe.env_addr_mapping.get(name) {
+                Some(r) => r,
+                None => {
+                    return Err(format!(
+                    "Lookup: {name} didn't exist in the callframe env_addr_mapping, compiler bug?"
+                ))
                 }
-                None => return Err(format!("not found: {name}",)),
             };
+
+            match env
+                .get(heap_addr)
+                .cloned()
+                .or_else(|| globals.get(name).map(|_| Expr::Keyword(name.clone(), None)))
+            {
+                Some(expr) => vm.stack.push(expr.clone()),
+                None => return Err(format!("{name} at heap-addr: {heap_addr} was not defined.")),
+            }
         }
         VMInstruction::Call(arity) => {
             let stack_len = vm.stack.len();
@@ -397,16 +388,16 @@ fn test_add() {
     let mut vm = get_initial_vm_and_chunk(Env::default());
     vm.callframes.push(callframe);
 
-    assert!(run(&mut vm, &get_globals()).is_ok());
+    assert!(run(&mut vm, &get_builtins()).is_ok());
 
     debug_assert_eq!(vm.stack, vec![Expr::num(3.0)])
 }
 
-pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
+pub fn get_initial_vm_and_chunk() -> VM {
     VM {
         callframes: vec![],
         stack: vec![],
-        envs: HashMap::from([("initial_env".to_string(), initial_env)]),
+        env: HashMap::new(),
         log: Vec::new(),
     }
 }
@@ -414,7 +405,7 @@ pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
 pub type Macros = HashMap<String, MacroFn>;
 #[derive(Default)]
 pub struct CompilerEnv {
-    pub env: Env,
+    pub env: HashMap<String, Expr>,
     pub macros: Macros,
 }
 
@@ -428,20 +419,20 @@ pub fn prepare_vm(
         Err(err) => return Err(err),
     };
 
-    let mut vm = get_initial_vm_and_chunk(compiler_env.env);
+    let mut vm = get_initial_vm_and_chunk();
 
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
     let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
 
-    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())
+    compile_many_exprs(macro_expanded, &mut chunk, &get_builtins())
         .map_err(|err| format!("{err}"))?;
 
     let callframe = Callframe {
         ip: 0,
         chunk,
-        env: "initial_env".to_string(),
+        env_addr_mapping: env_addr_mapping,
     };
     vm.callframes.push(callframe);
 
@@ -463,7 +454,7 @@ pub fn jit_run_vm(input: &str) -> Result<VM, String> {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
-    run(&mut vm, &get_globals()).map(|_| vm)
+    run(&mut vm, &get_builtins()).map(|_| vm)
 }
 
 // just for tests
@@ -489,7 +480,13 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         None,
     )
     .map_err(|err| format!("Error when compiling prelude: {}", err))?;
-    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {}", err))?;
+
+    let initial_env_mapping = match vm.callframes.get(0) {
+        Some(callframe) => callframe.env_addr_mapping.clone(),
+        None => return Err("No initial callframe found when getting prelude".to_string()),
+    };
+
+    run(&mut vm, &get_builtins()).map_err(|err| format!("Error when running prelude: {}", err))?;
 
     if !vm.log.is_empty() {
         return Err(format!(
@@ -497,14 +494,24 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
             vm.log.join("\n")
         ));
     }
-
-    match vm.envs.get("initial_env") {
-        Some(env) => Ok(CompilerEnv {
-            env: env.clone(),
-            macros,
-        }),
-        None => Err("Could not find initial env when compiling prelude.".to_string()),
+    let mut prelude_env: HashMap<String, Expr> = HashMap::new();
+    for (k, v) in initial_env_mapping {
+        match vm.env.get(&v) {
+            Some(expr) => {
+                prelude_env.insert(k, expr.clone());
+            }
+            None => {
+                return Err(format!(
+                    "Error when resolving initial env, could not find: {k}"
+                ))
+            }
+        }
     }
+
+    Ok(CompilerEnv {
+        env: prelude_env,
+        macros,
+    })
 }
 
 #[test]
