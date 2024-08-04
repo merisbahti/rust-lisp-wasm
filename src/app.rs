@@ -1,4 +1,4 @@
-use crate::compile::get_globals;
+use crate::compile::get_builtins;
 use crate::expr::Expr;
 use crate::vm;
 use crate::vm::get_prelude;
@@ -124,7 +124,7 @@ pub fn app() -> Html {
         move |_stuff: MouseEvent| {
             let result = vm_result
                 .clone()
-                .and_then(|mut vm| vm::step(&mut vm, &get_globals()).map(|_| vm));
+                .and_then(|mut vm| vm::step(&mut vm, &get_builtins()).map(|_| vm));
             vm_handle.set(result.clone());
         }
     });
@@ -136,7 +136,7 @@ pub fn app() -> Html {
             let prepared_vm = prepare_with_prelude(source.as_str());
 
             let res = prepared_vm.and_then(|mut vm| {
-                run(&mut vm, &get_globals())?;
+                run(&mut vm, &get_builtins())?;
                 Ok(vm)
             });
             vm_handle.set(res)

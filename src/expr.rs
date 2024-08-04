@@ -29,7 +29,12 @@ pub enum Expr {
         Option<String>, /* variadic */
         String,         /* env where it was defined*/
     ),
-    LambdaDefinition(Chunk, Option<String> /* variadic? */, Vec<String>),
+    LambdaDefinition(
+        Chunk,
+        Option<String>, /* variadic? */
+        Vec<String>,
+        Vec<String>, /* closed-over variables */
+    ),
     Nil,
 }
 

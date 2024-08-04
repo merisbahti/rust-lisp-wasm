@@ -1,3 +1,9 @@
+(define a 1)
+(define (f x) ; lambda closing over a
+  (define b 1)
+  (define (g y) ; lambda closing over a, b, x
+    (+ a b x y)))
+
 (define last-pair
   (lambda (xs)
     (cond

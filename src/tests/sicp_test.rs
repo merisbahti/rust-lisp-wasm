@@ -3,7 +3,7 @@ use crate::parse::ParseInput;
 
 #[test]
 fn test_sicp() {
-    use crate::compile::get_globals;
+    use crate::compile::get_builtins;
     use crate::vm::run;
     use crate::vm::VM;
     use crate::vm::{get_prelude, prepare_vm, CompilerEnv};
@@ -63,7 +63,7 @@ fn test_sicp() {
     )]);
 
     for (file, mut vm) in successful_files {
-        let result = run(&mut vm, &get_globals()).map(|_| vm);
+        let result = run(&mut vm, &get_builtins()).map(|_| vm);
         let result_log = &result.map(|x| x.log);
         assert!(
             result_log == expected_logs.get(file).unwrap_or(&Ok(vec![])),
