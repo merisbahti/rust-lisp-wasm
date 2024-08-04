@@ -1,5 +1,5 @@
 use crate::{
-    compile::{collect_exprs_from_body, MacroFn},
+    compile::{collect_exprs_from_body, MacroFn, GLOBAL_DATA},
     expr::{Bool, Num},
     macro_expand::macro_expand,
     parse::{make_pair_from_vec, ParseInput},
@@ -7,7 +7,7 @@ use crate::{
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    compile::{compile_many_exprs, get_globals, BuiltIn},
+    compile::{compile_many_exprs, BuiltIn},
     expr::Expr,
     parse,
 };
@@ -71,9 +71,9 @@ pub struct Chunk {
     pub code: Vec<VMInstruction>,
 }
 
-pub fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
+pub fn run(vm: &mut VM) -> Result<(), String> {
     loop {
-        match step(vm, globals) {
+        match step(vm) {
             Err(err) => return Err(err),
             Ok(()) if vm.callframes.is_empty() => return Ok(()),
             Ok(()) => {}
@@ -81,7 +81,7 @@ pub fn run(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String
     }
 }
 
-pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), String> {
+pub fn step(vm: &mut VM) -> Result<(), String> {
     // let callframes = &mut vm.callframes;
     // let len = callframes.len();
     let envs = &mut vm.envs;
@@ -192,7 +192,6 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                 name: String,
                 env_name: String,
                 envs: &HashMap<String, Env>,
-                globals: &HashMap<String, BuiltIn>,
             ) -> Option<Expr> {
                 let env = match envs.get(&env_name) {
                     Some(env) => env,
@@ -203,17 +202,17 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
                     .get(&name)
                     .cloned()
                     .or_else(|| match parent {
-                        Some(parent_name) => lookup_env(name.clone(), parent_name, envs, globals),
+                        Some(parent_name) => lookup_env(name.clone(), parent_name, envs),
                         None => None,
                     })
                     .or_else(|| {
-                        globals
+                        GLOBAL_DATA
                             .get(&name)
                             .map(|_| Expr::Keyword(name.clone(), None))
                     })
             }
 
-            match lookup_env(name.to_string(), callframe.env.clone(), envs, globals) {
+            match lookup_env(name.to_string(), callframe.env.clone(), envs) {
                 Some(instructions) => {
                     vm.stack.push(instructions.clone());
                     return Ok(());
@@ -226,7 +225,7 @@ pub fn step(vm: &mut VM, globals: &HashMap<String, BuiltIn>) -> Result<(), Strin
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             match first {
-                Some(Expr::Keyword(str, ..)) if let Some(builtin) = globals.get(&str) => {
+                Some(Expr::Keyword(str, ..)) if let Some(builtin) = GLOBAL_DATA.get(&str) => {
                     match builtin {
                         BuiltIn::OneArg(func) => {
                             if *arity != 1 {
@@ -397,7 +396,7 @@ fn test_add() {
     let mut vm = get_initial_vm_and_chunk(Env::default());
     vm.callframes.push(callframe);
 
-    assert!(run(&mut vm, &get_globals()).is_ok());
+    assert!(run(&mut vm).is_ok());
 
     debug_assert_eq!(vm.stack, vec![Expr::num(3.0)])
 }
@@ -435,8 +434,7 @@ pub fn prepare_vm(
     let mut macros = compiler_env.macros.clone();
     let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
 
-    compile_many_exprs(macro_expanded, &mut chunk, &get_globals())
-        .map_err(|err| format!("{err}"))?;
+    compile_many_exprs(macro_expanded, &mut chunk).map_err(|err| format!("{err}"))?;
 
     let callframe = Callframe {
         ip: 0,
@@ -463,7 +461,7 @@ pub fn jit_run_vm(input: &str) -> Result<VM, String> {
         Ok(vm) => vm,
         Err(err) => return Result::Err(err),
     };
-    run(&mut vm, &get_globals()).map(|_| vm)
+    run(&mut vm).map(|_| vm)
 }
 
 // just for tests
@@ -489,7 +487,7 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         None,
     )
     .map_err(|err| format!("Error when compiling prelude: {}", err))?;
-    run(&mut vm, &get_globals()).map_err(|err| format!("Error when running prelude: {}", err))?;
+    run(&mut vm).map_err(|err| format!("Error when running prelude: {}", err))?;
 
     if !vm.log.is_empty() {
         return Err(format!(

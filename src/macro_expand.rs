@@ -8,7 +8,7 @@ use crate::compile::{
 use crate::parse::make_pair_from_vec;
 use crate::vm::{run, Callframe};
 use crate::{
-    compile::{get_globals, MacroFn},
+    compile::MacroFn,
     expr::Expr,
     vm::{get_initial_vm_and_chunk, Chunk, Env, VMInstruction},
 };
@@ -88,7 +88,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk, &get_globals())?;
+            compile_many_exprs(macro_exprs, &mut chunk)?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {
@@ -99,7 +99,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             // add params and args in vm envs (unevaluated)
             vm.callframes.push(callframe);
 
-            match run(&mut vm, &get_globals()) {
+            match run(&mut vm) {
                 Ok(e) => e,
                 Err(err) => {
                     return comp_err!(

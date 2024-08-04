@@ -2,7 +2,6 @@
 use crate::compile::compile_internal;
 #[cfg(test)]
 use crate::{
-    compile::get_globals,
     expr::Expr,
     vm::{Chunk, VMInstruction},
 };
@@ -17,7 +16,6 @@ fn test_simple_add_compilation() {
             Expr::num(2.0),
         ]),
         &mut initial_chunk,
-        &get_globals(),
     ) {
         Ok(_) => {}
         Err(e) => panic!("Error {:?}", e),
@@ -47,7 +45,7 @@ fn losta_compile() {
         .unwrap()
         .clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk, &get_globals()) {
+        match compile_internal(&expr, &mut chunk) {
             Ok(..) => chunk.code,
             Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
         }
@@ -160,7 +158,7 @@ fn lambda_compile_test() {
         .unwrap()
         .clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk, &get_globals()) {
+        match compile_internal(&expr, &mut chunk) {
             Ok(()) => chunk,
             Err(e) => panic!("Error: {:?}", e),
         }

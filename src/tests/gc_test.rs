@@ -1,6 +1,5 @@
 #[cfg(test)]
 use crate::{
-    compile::get_globals,
     expr::Expr,
     vm::{get_prelude, prepare_vm, step},
 };
@@ -71,7 +70,6 @@ fn gc_test() {
 (assert (length (queens 4)) 10)
         ";
 
-    let globals = &get_globals();
     let prelude = get_prelude();
     let (mut vm, _) = prelude
         .and_then(|env| {
@@ -101,7 +99,7 @@ fn gc_test() {
     }
 
     while cycles_left > 0 {
-        match step(&mut vm, globals) {
+        match step(&mut vm) {
             Err(err) => panic!("{err}"),
             Ok(()) if vm.callframes.is_empty() => {
                 cycles_left = 0;

@@ -877,6 +877,7 @@ dependencies = [
  "include_dir",
  "nom",
  "nom_locate",
+ "once_cell",
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-sys",
