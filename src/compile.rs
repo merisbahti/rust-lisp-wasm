@@ -82,7 +82,7 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
 
 type CompileResult = Result<(), CompileError>;
 
-pub static GLOBAL_DATA: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
+pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
     let globals = HashMap::from([
         (
             "nil?".to_string(),
@@ -501,7 +501,7 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
         Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
             if let Expr::Keyword(kw, ..) = l {
-                let global_arity = match GLOBAL_DATA.get(kw) {
+                let global_arity = match BUILTIN_FNS.get(kw) {
                     Some(BuiltIn::OneArg(..)) => Some(1),
                     Some(BuiltIn::TwoArg(..)) => Some(2),
                     _ => None,

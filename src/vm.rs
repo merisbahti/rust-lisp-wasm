@@ -1,5 +1,5 @@
 use crate::{
-    compile::{collect_exprs_from_body, MacroFn, GLOBAL_DATA},
+    compile::{collect_exprs_from_body, MacroFn, BUILTIN_FNS},
     expr::{Bool, Num},
     macro_expand::macro_expand,
     parse::{make_pair_from_vec, ParseInput},
@@ -206,7 +206,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         None => None,
                     })
                     .or_else(|| {
-                        GLOBAL_DATA
+                        BUILTIN_FNS
                             .get(&name)
                             .map(|_| Expr::Keyword(name.clone(), None))
                     })
@@ -225,7 +225,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             let first = vm.stack.get(stack_len - arity - 1).cloned();
 
             match first {
-                Some(Expr::Keyword(str, ..)) if let Some(builtin) = GLOBAL_DATA.get(&str) => {
+                Some(Expr::Keyword(str, ..)) if let Some(builtin) = BUILTIN_FNS.get(&str) => {
                     match builtin {
                         BuiltIn::OneArg(func) => {
                             if *arity != 1 {
