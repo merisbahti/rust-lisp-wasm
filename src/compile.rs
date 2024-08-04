@@ -41,20 +41,20 @@ impl Display for CompileError {
 macro_rules! comp_err {
     ($srcloc:expr, $fmt_str:literal) => {
         {
-            Result::<(), CompileError>::Err(
+            Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str),
-                    srcloc: extract_srcloc($srcloc)
+                    srcloc: crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
     };
     ($srcloc:expr, $fmt_str:literal, $($args:expr),*) => {
         {
-            Result::<(), CompileError>::Err(
+            Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str, $($args),*),
-                    srcloc: extract_srcloc($srcloc)
+                    srcloc: crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
@@ -88,7 +88,7 @@ pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
             "error".to_string(),
             BuiltIn::OneArg(|expr| {
                 comp_err!(expr, "{expr}")
-                    .map(|_| expr.clone())
+                    .map(|_: Expr| expr.clone())
                     .map_err(|err| format!("{err}"))
             }),
         ),
@@ -289,6 +289,115 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
         }),
     }
 }
+
+pub fn get_local_variables(exprs: &Vec<Expr>) -> Vec<String> {
+    exprs
+        .into_iter()
+        .filter_map(|expr| match expr {
+            Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "define" => match r {
+                Expr::Pair(
+                    box Expr::Pair(box Expr::Keyword(fn_name, ..), ..),
+                    box Expr::Pair(..),
+                    ..,
+                ) => Some(fn_name.clone()),
+                Expr::Pair(box Expr::Keyword(kw, ..), box Expr::Pair(..), ..) => Some(kw.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<Vec<String>>()
+}
+
+pub fn find_closed_vars_in_fn(
+    parent_scope: &Vec<String>,
+    fn_args: &Expr,
+    fn_body: &Expr,
+) -> Result<Vec<String>, CompileError> {
+    let body = collect_exprs_from_body(fn_body)?;
+
+    let lambda_args = collect_kws_from_expr(fn_args)?;
+    let locals = get_local_variables(&body);
+    let child_scope = vec![lambda_args, locals].concat();
+
+    let lambda_parent = parent_scope
+        .clone()
+        .into_iter()
+        .filter(|x| !child_scope.contains(x))
+        .collect::<Vec<String>>();
+
+    // remove the globals that exist as args
+
+    find_closed_variables(&body, &lambda_parent, &child_scope)
+}
+
+// internal fn that finds closed variables.
+pub fn find_closed_variables(
+    exprs: &Vec<Expr>,
+    original_parent_scope: &Vec<String>, // variables already defined before
+    // defined since before
+    new_definitions: &Vec<String>, // variables being defined since start of recursion
+) -> Result<Vec<String>, CompileError> {
+    let local_scope = vec![new_definitions.clone(), get_local_variables(exprs)].concat();
+    let mut closed = vec![];
+    for expr in exprs {
+        match expr {
+            Expr::Pair(
+                box Expr::Keyword(lambda_kw, ..),
+                box Expr::Pair(kw_pairs, box lambda_body, ..),
+                ..,
+            ) if *lambda_kw == "lambda".to_string() => {
+                let new_locals =
+                    vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                let mut closed_in_lambda = find_closed_variables(
+                    &collect_exprs_from_body(lambda_body)?,
+                    &original_parent_scope,
+                    &new_locals,
+                )?;
+                closed.append(&mut closed_in_lambda);
+            }
+            Expr::Pair(
+                box Expr::Keyword(define_kw, ..),
+                box Expr::Pair(
+                    box Expr::Pair(box Expr::Keyword(_lambda_name, ..), kw_pairs, ..),
+                    box lambda_body,
+                    ..,
+                ),
+                ..,
+            ) if *define_kw == "define".to_string() => {
+                let new_locals =
+                    vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                let mut closed_in_lambda = find_closed_variables(
+                    &collect_exprs_from_body(lambda_body)?,
+                    &original_parent_scope,
+                    &new_locals,
+                )?;
+                closed.append(&mut closed_in_lambda);
+            }
+            Expr::Pair(box l, box r, ..) => {
+                let mut closed_in_l =
+                    find_closed_variables(&vec![l.clone()], &original_parent_scope, &local_scope)?;
+                let mut closed_in_r =
+                    find_closed_variables(&vec![r.clone()], &original_parent_scope, &local_scope)?;
+                closed.append(&mut closed_in_l);
+                closed.append(&mut closed_in_r);
+            }
+            Expr::Keyword(kw, ..) => {
+                if original_parent_scope.contains(kw) {
+                    closed.push(kw.clone())
+                } else if local_scope.contains(kw)
+                    || vec!["define", "kw", "+"].contains(&(*kw).as_str())
+                {
+                    // ok
+                } else {
+                    return comp_err!(expr, "undefined variable: {kw}");
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(closed)
+}
+
 fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),

@@ -33,8 +33,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                         &macro_definition,
                         "rest-dot can only occur as second-to-last argument, but found: ({})",
                         all_kws.join(" ")
-                    )
-                    .map(|_| Expr::Nil);
+                    );
                 }
             };
 
@@ -113,8 +112,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                     return comp_err!(
                         &macro_definition,
                         "Error when running macro expansion: {err}"
-                    )
-                    .map(|_| Expr::Nil);
+                    );
                 }
             };
 
@@ -124,8 +122,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                     &macro_definition,
                     "expected one value on the stack, got {:#?}",
                     vm.stack
-                )
-                .map(|_| Expr::Nil),
+                ),
             }
         }
     })
@@ -203,12 +200,12 @@ pub fn macro_expand_one(
         ) if let (None, "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
-            comp_err!(expr, "macro not found: {kw}").map(|_| Expr::Nil)
+            comp_err!(expr, "macro not found: {kw}")
         }
         Expr::Pair(box Expr::Keyword(macroexpand, ..), rest, ..)
             if let "macroexpand" = (macroexpand.as_str()) =>
         {
-            comp_err!(expr, "can't call macroexpand on {rest}").map(|_| Expr::Nil)
+            comp_err!(expr, "can't call macroexpand on {rest}")
         }
         pair @ Expr::Pair(..) => {
             let exprs = collect_exprs_from_body(pair)?;
