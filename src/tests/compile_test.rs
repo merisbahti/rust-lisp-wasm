@@ -7,6 +7,7 @@ use crate::comp_err;
 use crate::compile::compile_internal;
 #[cfg(test)]
 use crate::compile::find_closed_vars_in_fn;
+#[cfg(test)]
 use crate::compile::get_all_defines;
 #[cfg(test)]
 use crate::compile::{compile_many_exprs, CompileError};
@@ -139,7 +140,7 @@ fn losta_compile() {
     assert_eq!(
         parse_and_compile("((lambda () 1))"),
         vec![
-            VMInstruction::Constant(Expr::LambdaDefinition(
+            VMInstruction::MakeLambda(
                 Chunk {
                     code: vec![
                         VMInstruction::Constant(Expr::num(1.0)),
@@ -149,8 +150,7 @@ fn losta_compile() {
                 None,
                 vec![],
                 vec![],
-            )),
-            VMInstruction::MakeLambda,
+            ),
             VMInstruction::Call(0)
         ]
     );
@@ -259,20 +259,17 @@ fn lambda_compile_test() {
     assert_eq!(
         parse_and_compile("(lambda () 1)"),
         Chunk {
-            code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
-                    Chunk {
-                        code: vec![
-                            VMInstruction::Constant(Expr::num(1.0)),
-                            VMInstruction::Return
-                        ],
-                    },
-                    None,
-                    vec![],
-                    vec![],
-                )),
-                VMInstruction::MakeLambda
-            ],
+            code: vec![VMInstruction::MakeLambda(
+                Chunk {
+                    code: vec![
+                        VMInstruction::Constant(Expr::num(1.0)),
+                        VMInstruction::Return
+                    ],
+                },
+                None,
+                vec![],
+                vec![],
+            )],
         }
     );
 
@@ -280,7 +277,7 @@ fn lambda_compile_test() {
         parse_and_compile("((lambda () 1))"),
         Chunk {
             code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
+                VMInstruction::MakeLambda(
                     Chunk {
                         code: vec![
                             VMInstruction::Constant(Expr::num(1.0)),
@@ -290,8 +287,7 @@ fn lambda_compile_test() {
                     None,
                     vec![],
                     vec![],
-                )),
-                VMInstruction::MakeLambda,
+                ),
                 VMInstruction::Call(0)
             ],
         }

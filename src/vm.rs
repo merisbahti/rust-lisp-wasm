@@ -15,7 +15,12 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
     Lookup(String),
-    MakeLambda,
+    MakeLambda(
+        Chunk,
+        Option<String>, /* variadic? */
+        Vec<String>,    // parameters
+        Vec<String>,    // closed-over variables
+    ),
     Define(String),
     PopStack,
     Apply,
@@ -40,7 +45,14 @@ impl Display for VMInstruction {
             VMInstruction::Display => write!(f, "Display"),
             VMInstruction::PopStack => write!(f, "PopStack"),
             VMInstruction::Apply => write!(f, "Apply"),
-            VMInstruction::MakeLambda => write!(f, "MakeLambda"),
+            VMInstruction::MakeLambda(_, _, params, closeds) => {
+                write!(
+                    f,
+                    "MakeLambda(params: {}, closeds: {}",
+                    params.join(", "),
+                    closeds.join(", ")
+                )
+            }
         }
     }
 }
@@ -164,16 +176,14 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 definition_env,
             ));
         }
-        VMInstruction::MakeLambda => {
+        VMInstruction::MakeLambda(instructions, variadic, kws, _closeds) => {
             let definition_env = callframe.env.clone();
-            let (instructions, variadic, kws) = match vm.stack.pop() {
-                Some(Expr::LambdaDefinition(instructions, variadic, kws, ..)) => {
-                    (instructions, variadic, kws)
-                }
-                stuff => return Err(format!("expected lambda definition, but found: {stuff:#?}",)),
-            };
-            vm.stack
-                .push(Expr::Lambda(instructions, kws, variadic, definition_env));
+            vm.stack.push(Expr::Lambda(
+                instructions.clone(),
+                kws.clone(),
+                variadic.clone(),
+                definition_env,
+            ));
         }
         VMInstruction::Define(name) => {
             let definee = match vm.stack.pop() {

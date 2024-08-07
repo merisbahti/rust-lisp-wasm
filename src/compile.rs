@@ -70,7 +70,6 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Num(Num { srcloc: s, .. }) => s,
         Expr::Boolean(Bool { srcloc: s, .. }) => s,
         Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
-        Expr::LambdaDefinition(..) => todo!("Not implemented src_loc for this lambda-def."),
         Expr::Nil => &Some(SrcLoc {
             line: 13391339,
             column: 0,
@@ -359,7 +358,7 @@ pub fn find_closed_variables(
                 )?;
                 closed.append(&mut closed_in_lambda);
             }
-            Expr::Pair(box Expr::Keyword(quote_kw, ..), box r, ..) if quote_kw == &"quote" => {
+            Expr::Pair(box Expr::Keyword(quote_kw, ..), box _, ..) if quote_kw == &"quote" => {
                 // noop
             }
             Expr::Pair(box l, box r, ..) => {
@@ -435,15 +434,12 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
     let closed_variables = find_closed_variables(&body.clone(), &env, &lambda_env)?;
     compile_many_exprs(body.clone(), &mut new_body_chunk, &mut lambda_env)?;
 
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::LambdaDefinition(
-            new_body_chunk,
-            rest_arg.cloned(),
-            kws.to_vec(),
-            closed_variables,
-        )));
-    chunk.code.push(VMInstruction::MakeLambda);
+    chunk.code.push(VMInstruction::MakeLambda(
+        new_body_chunk,
+        rest_arg.cloned(),
+        kws.to_vec(),
+        closed_variables,
+    ));
     Ok(())
 }
 
@@ -617,7 +613,7 @@ pub static SPECIAL_FORMS: Lazy<HashMap<String, CompileFn>> = Lazy::new(|| {
 
 pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     match &expr {
-        expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
+        expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {}", expr)
         }
         Expr::Pair(box Expr::Keyword(kw, ..), box r, ..)
