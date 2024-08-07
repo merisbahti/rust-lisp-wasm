@@ -442,61 +442,69 @@ fn make_or(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
+fn make_quote(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+    let exprs = collect_exprs_from_body(expr)?;
+    if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
+        chunk.code.push(VMInstruction::Constant(arg.clone()))
+    } else {
+        return comp_err!(expr, "quote expects 1 arg, but found: {:#?}", exprs);
+    }
+    Ok(())
+}
+fn make_display(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+    match expr {
+        Expr::Pair(box displayee, box Expr::Nil, ..) => {
+            compile_internal(displayee, chunk)?;
+            chunk.code.push(VMInstruction::Display);
+            return Ok(());
+        }
+        otherwise => {
+            return comp_err!(
+                expr,
+                "Expected one argument for display, but found {}",
+                otherwise
+            )
+        }
+    }
+}
+fn make_apply(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+    let exprs = collect_exprs_from_body(expr)?;
+    if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
+        compile_internal(function, chunk)?;
+        compile_internal(args, chunk)?;
+        chunk.code.push(VMInstruction::Apply);
+        chunk.code.push(VMInstruction::Call(0));
+    } else {
+        return comp_err!(expr, "apply expects 2 args, but found: {}", exprs.len());
+    }
+    Ok(())
+}
+
 pub type MacroFn = Arc<dyn Fn(Option<SrcLoc>, &Vec<Expr>) -> Result<Expr, CompileError>>;
+
+pub static SPECIAL_FORMS: Lazy<HashMap<String, fn(&Expr, &mut Chunk) -> CompileResult>> =
+    Lazy::new(|| {
+        let mut hm = HashMap::<String, fn(&Expr, &mut Chunk) -> CompileResult>::new();
+        hm.insert("lambda".to_string(), make_lambda);
+        hm.insert("define".to_string(), make_define);
+        hm.insert("if".to_string(), make_if);
+        hm.insert("and".to_string(), make_and);
+        hm.insert("or".to_string(), make_or);
+        hm.insert("quote".to_string(), make_quote);
+        hm.insert("apply".to_string(), make_apply);
+        hm.insert("display".to_string(), make_display);
+        hm
+    });
 
 pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {}", expr)
         }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "lambda" => {
-            make_lambda(r, chunk)?;
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "define" => {
-            make_define(r, chunk)?;
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "if" => {
-            make_if(r, chunk)?;
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "and" => {
-            make_and(r, chunk)?;
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "or" => {
-            make_or(r, chunk)?;
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "quote" => {
-            let exprs = collect_exprs_from_body(r)?;
-            if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
-                chunk.code.push(VMInstruction::Constant(arg.clone()))
-            } else {
-                return comp_err!(expr, "quote expects 1 arg, but found: {:#?}", exprs);
-            }
-        }
-        Expr::Pair(expr @ box Expr::Keyword(kw, ..), box r, ..) if kw == "apply" => {
-            let exprs = collect_exprs_from_body(r)?;
-            if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
-                compile_internal(function, chunk)?;
-                compile_internal(args, chunk)?;
-                chunk.code.push(VMInstruction::Apply);
-                chunk.code.push(VMInstruction::Call(0));
-            } else {
-                return comp_err!(expr, "apply expects 2 args, but found: {}", exprs.len());
-            }
-        }
-        Expr::Pair(
-            box Expr::Keyword(kw, ..),
-            box Expr::Pair(box displayee, box Expr::Nil, ..),
-            ..,
-        ) if kw == "display" => {
-            compile_internal(displayee, chunk)?;
-            chunk.code.push(VMInstruction::Display);
-        }
-        Expr::Pair(disp @ box Expr::Keyword(kw, ..), box otherwise, ..) if kw == "display" => {
-            return comp_err!(
-                disp,
-                "Expected one argument for display, but found {}",
-                otherwise
-            )
+        Expr::Pair(box Expr::Keyword(kw, ..), box r, ..)
+            if let Some(special_form) = SPECIAL_FORMS.get(kw) =>
+        {
+            special_form(r, chunk)?;
         }
         Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
