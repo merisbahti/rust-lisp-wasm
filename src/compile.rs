@@ -317,7 +317,15 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
     let mut new_body_chunk = Chunk { code: vec![] };
 
     // find closing over variables
-    compile_many_exprs(body.clone(), &mut new_body_chunk, env)?;
+    let mut lambda_env = {
+        let mut lambda_env = env.clone();
+        lambda_env.append(&mut kws.to_vec());
+        if let Some(rest_arg) = rest_arg {
+            lambda_env.push(rest_arg.clone());
+        }
+        lambda_env
+    };
+    compile_many_exprs(body.clone(), &mut new_body_chunk, &mut lambda_env)?;
 
     chunk
         .code
@@ -555,14 +563,16 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -
 
 fn get_kw_from_define(expr: &Expr) -> Option<String> {
     match expr {
-        Expr::Pair(box Expr::Pair(box Expr::Keyword(fn_name, ..), ..), box Expr::Pair(..), ..) => {
-            // this is a lambda definition
-            // kws should contain a fn name and then its args
-            Some(fn_name.clone())
-        }
-        Expr::Pair(box Expr::Keyword(kw, ..), box Expr::Pair(_, box Expr::Nil, ..), ..) => {
-            Some(kw.clone())
-        }
+        Expr::Pair(
+            box Expr::Keyword(define_kw, ..),
+            box Expr::Pair(box Expr::Pair(box Expr::Keyword(kw, ..), ..), ..),
+            ..,
+        ) if define_kw == "define" => Some(kw.clone()),
+        Expr::Pair(
+            box Expr::Keyword(define_kw, ..),
+            box Expr::Pair(box Expr::Keyword(kw, ..), ..),
+            ..,
+        ) if define_kw == "define" => Some(kw.clone()),
         _ => return None,
     }
 }

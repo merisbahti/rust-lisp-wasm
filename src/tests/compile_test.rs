@@ -1,5 +1,10 @@
 #[cfg(test)]
+use std::assert_matches::assert_matches;
+
+#[cfg(test)]
 use crate::compile::compile_internal;
+#[cfg(test)]
+use crate::compile::{compile_many_exprs, CompileError};
 #[cfg(test)]
 use crate::{
     expr::Expr,
@@ -144,6 +149,69 @@ fn losta_compile() {
             VMInstruction::Define("a".to_string()),
             VMInstruction::Constant(Expr::Nil),
         ]
+    );
+}
+
+#[test]
+fn compile_recursive() {
+    fn parse_and_compile(input: &str) -> Result<(), crate::compile::CompileError> {
+        let expr = crate::parse::parse(&crate::parse::ParseInput {
+            source: input,
+            file_name: Some("lambda_compile_test"),
+        })
+        .map_err(|err| CompileError {
+            srcloc: None,
+            message: err,
+        })?;
+        let mut chunk = Chunk { code: vec![] };
+        compile_many_exprs(expr, &mut chunk, &mut vec![])
+    }
+
+    assert_matches!(
+        parse_and_compile(
+            "
+        (define (f x) (f x))"
+        ),
+        Ok(..)
+    );
+    assert_matches!(
+        parse_and_compile(
+            "
+        (define (f x) (f))"
+        ),
+        Ok(..)
+    );
+    assert_matches!(
+        parse_and_compile(
+            "
+        (define (list . xs) (xs))"
+        ),
+        Ok(..)
+    );
+    assert_matches!(
+        parse_and_compile(
+            "
+        (define (list . xs) (xz))"
+        ),
+        Err(CompileError {
+            message,
+            ..
+        }) if message == "xz is  not defined".to_string()
+    );
+    assert_matches!(
+        parse_and_compile(
+            "
+(define (fold-right op initial sequence)
+    (if
+
+      (nil? sequence)
+      initial
+      (op
+        (car sequence)
+        (fold-right op initial (cdr sequence)))))
+"
+        ),
+        Ok(..)
     );
 }
 
