@@ -88,7 +88,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk)?;
+            compile_many_exprs(macro_exprs, &mut chunk, &mut vec![])?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {

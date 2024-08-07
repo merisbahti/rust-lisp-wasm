@@ -281,7 +281,7 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
         }),
     }
 }
-fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),
         Expr::Pair(pairs @ box Expr::Pair(..), body @ box Expr::Pair(..), ..) => (pairs, body),
@@ -317,7 +317,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     let mut new_body_chunk = Chunk { code: vec![] };
 
     // find closing over variables
-    compile_many_exprs(body.clone(), &mut new_body_chunk)?;
+    compile_many_exprs(body.clone(), &mut new_body_chunk, env)?;
 
     chunk
         .code
@@ -330,7 +330,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-fn make_define(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_define(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let kw = match expr {
         Expr::Pair(
             box Expr::Pair(box Expr::Keyword(fn_name, ..), fn_args, ..),
@@ -342,6 +342,7 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
             make_lambda(
                 &Expr::Pair(fn_args.clone(), body.clone(), src_loc.clone()),
                 chunk,
+                env,
             )?;
             Ok(fn_name.clone())
         }
@@ -350,7 +351,7 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
             box Expr::Pair(box definee, box Expr::Nil, ..),
             ..,
         ) => {
-            compile_internal(definee, chunk)?;
+            compile_internal(definee, chunk, env)?;
             Ok(kw.clone())
         }
         otherwise => {
@@ -366,7 +367,7 @@ fn make_define(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-fn make_if(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_if(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (pred, consequent, alternate) = match expr {
         Expr::Pair(
             box pred,
@@ -383,13 +384,13 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     };
 
     let mut pred_chunk = Chunk { code: vec![] };
-    compile_internal(pred, &mut pred_chunk)?;
+    compile_internal(pred, &mut pred_chunk, env)?;
 
     let mut alt_chunk = Chunk { code: vec![] };
-    compile_internal(alternate, &mut alt_chunk)?;
+    compile_internal(alternate, &mut alt_chunk, env)?;
 
     let mut cons_chunk = Chunk { code: vec![] };
-    compile_internal(consequent, &mut cons_chunk)?;
+    compile_internal(consequent, &mut cons_chunk, env)?;
 
     let end_ip = cons_chunk.code.len();
 
@@ -407,15 +408,15 @@ fn make_if(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-fn make_and(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_and(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
         otherwise => return comp_err!(expr, "and, expected two args but found: {}", otherwise),
     };
     // l + popjmp(r) + jmp(return) + r + return
     let mut r_chunk = Chunk { code: vec![] };
-    compile_internal(r, &mut r_chunk)?;
-    compile_internal(l, chunk)?;
+    compile_internal(r, &mut r_chunk, env)?;
+    compile_internal(l, chunk, env)?;
     chunk.code.push(VMInstruction::CondJump(2));
     chunk.code.push(VMInstruction::Constant(Expr::bool(true)));
     chunk
@@ -426,14 +427,14 @@ fn make_and(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-fn make_or(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_or(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (l, r) = match expr {
         Expr::Pair(box l, box Expr::Pair(box r, box Expr::Nil, ..), ..) => (l, r),
         otherwise => return comp_err!(expr, "or, expected two args but found: {}", otherwise),
     };
     let mut r_chunk = Chunk { code: vec![] };
-    compile_internal(r, &mut r_chunk)?;
-    compile_internal(l, chunk)?;
+    compile_internal(r, &mut r_chunk, env)?;
+    compile_internal(l, chunk, env)?;
     chunk
         .code
         .push(VMInstruction::CondJump(1 + r_chunk.code.len()));
@@ -442,7 +443,7 @@ fn make_or(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-fn make_quote(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_quote(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
     if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
         chunk.code.push(VMInstruction::Constant(arg.clone()))
@@ -451,10 +452,10 @@ fn make_quote(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     }
     Ok(())
 }
-fn make_display(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_display(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     match expr {
         Expr::Pair(box displayee, box Expr::Nil, ..) => {
-            compile_internal(displayee, chunk)?;
+            compile_internal(displayee, chunk, env)?;
             chunk.code.push(VMInstruction::Display);
             return Ok(());
         }
@@ -467,11 +468,11 @@ fn make_display(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
         }
     }
 }
-fn make_apply(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+fn make_apply(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
     if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
-        compile_internal(function, chunk)?;
-        compile_internal(args, chunk)?;
+        compile_internal(function, chunk, env)?;
+        compile_internal(args, chunk, env)?;
         chunk.code.push(VMInstruction::Apply);
         chunk.code.push(VMInstruction::Call(0));
     } else {
@@ -480,23 +481,23 @@ fn make_apply(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
+pub type CompileFn = fn(&Expr, &mut Chunk, env: &mut Vec<String>) -> CompileResult;
 pub type MacroFn = Arc<dyn Fn(Option<SrcLoc>, &Vec<Expr>) -> Result<Expr, CompileError>>;
 
-pub static SPECIAL_FORMS: Lazy<HashMap<String, fn(&Expr, &mut Chunk) -> CompileResult>> =
-    Lazy::new(|| {
-        let mut hm = HashMap::<String, fn(&Expr, &mut Chunk) -> CompileResult>::new();
-        hm.insert("lambda".to_string(), make_lambda);
-        hm.insert("define".to_string(), make_define);
-        hm.insert("if".to_string(), make_if);
-        hm.insert("and".to_string(), make_and);
-        hm.insert("or".to_string(), make_or);
-        hm.insert("quote".to_string(), make_quote);
-        hm.insert("apply".to_string(), make_apply);
-        hm.insert("display".to_string(), make_display);
-        hm
-    });
+pub static SPECIAL_FORMS: Lazy<HashMap<String, CompileFn>> = Lazy::new(|| {
+    let mut hm = HashMap::<String, CompileFn>::new();
+    hm.insert("lambda".to_string(), make_lambda);
+    hm.insert("define".to_string(), make_define);
+    hm.insert("if".to_string(), make_if);
+    hm.insert("and".to_string(), make_and);
+    hm.insert("or".to_string(), make_or);
+    hm.insert("quote".to_string(), make_quote);
+    hm.insert("apply".to_string(), make_apply);
+    hm.insert("display".to_string(), make_display);
+    hm
+});
 
-pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
+pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     match &expr {
         expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {}", expr)
@@ -504,7 +505,7 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
         Expr::Pair(box Expr::Keyword(kw, ..), box r, ..)
             if let Some(special_form) = SPECIAL_FORMS.get(kw) =>
         {
-            special_form(r, chunk)?;
+            special_form(r, chunk, env)?;
         }
         Expr::Pair(box l, box r, ..) => {
             let exprs = collect_exprs_from_body(r)?;
@@ -526,14 +527,19 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
                     });
                 }
             }
-            compile_internal(l, chunk)?;
+            compile_internal(l, chunk, env)?;
             for expr in exprs.iter() {
-                compile_internal(expr, chunk)?;
+                compile_internal(expr, chunk, env)?;
             }
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
         Expr::Keyword(kw, ..) => {
-            chunk.code.push(VMInstruction::Lookup(kw.clone()));
+            if env.contains(kw) {
+                // check if exists in env
+                chunk.code.push(VMInstruction::Lookup(kw.clone()));
+            } else {
+                return comp_err!(expr, "{kw} is not defined");
+            }
         }
         expr @ (Expr::String(..)
         | Expr::Num(..)
@@ -546,9 +552,13 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk) -> CompileResult {
     Ok(())
 }
 
-pub fn compile_many_exprs(exprs: Vec<Expr>, chunk: &mut Chunk) -> CompileResult {
+pub fn compile_many_exprs(
+    exprs: Vec<Expr>,
+    chunk: &mut Chunk,
+    env: &mut Vec<String>,
+) -> CompileResult {
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
-        match compile_internal(expr, chunk) {
+        match compile_internal(expr, chunk, env) {
             Ok(_) => {}
             Err(e) => return Err(e),
         };

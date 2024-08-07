@@ -16,6 +16,7 @@ fn test_simple_add_compilation() {
             Expr::num(2.0),
         ]),
         &mut initial_chunk,
+        &mut vec![],
     ) {
         Ok(_) => {}
         Err(e) => panic!("Error {:?}", e),
@@ -45,7 +46,7 @@ fn losta_compile() {
         .unwrap()
         .clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk) {
+        match compile_internal(&expr, &mut chunk, &mut vec![]) {
             Ok(..) => chunk.code,
             Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
         }
@@ -158,7 +159,7 @@ fn lambda_compile_test() {
         .unwrap()
         .clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk) {
+        match compile_internal(&expr, &mut chunk, &mut vec![]) {
             Ok(()) => chunk,
             Err(e) => panic!("Error: {:?}", e),
         }

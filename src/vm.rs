@@ -411,7 +411,7 @@ pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
 }
 
 pub type Macros = HashMap<String, MacroFn>;
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CompilerEnv {
     pub env: Env,
     pub macros: Macros,
@@ -427,14 +427,21 @@ pub fn prepare_vm(
         Err(err) => return Err(err),
     };
 
-    let mut vm = get_initial_vm_and_chunk(compiler_env.env);
+    let mut vm = get_initial_vm_and_chunk(compiler_env.env.clone());
 
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
     let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
+    let initial_env_keys = compiler_env
+        .env
+        .map
+        .keys()
+        .cloned()
+        .collect::<Vec<String>>();
 
-    compile_many_exprs(macro_expanded, &mut chunk).map_err(|err| format!("{err}"))?;
+    compile_many_exprs(macro_expanded, &mut chunk, &mut initial_env_keys.clone())
+        .map_err(|err| format!("{err}"))?;
 
     let callframe = Callframe {
         ip: 0,
