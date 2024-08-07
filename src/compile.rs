@@ -362,6 +362,7 @@ fn make_define(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
             )
         }
     }?;
+
     chunk.code.push(VMInstruction::Define(kw.clone()));
     chunk.code.push(VMInstruction::Constant(Expr::Nil));
     Ok(())
@@ -534,7 +535,7 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -
             chunk.code.push(VMInstruction::Call(exprs.len()));
         }
         Expr::Keyword(kw, ..) => {
-            if env.contains(kw) {
+            if env.contains(kw) || BUILTIN_FNS.contains_key(kw) {
                 // check if exists in env
                 chunk.code.push(VMInstruction::Lookup(kw.clone()));
             } else {
@@ -552,11 +553,31 @@ pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -
     Ok(())
 }
 
+fn get_kw_from_define(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Pair(box Expr::Pair(box Expr::Keyword(fn_name, ..), ..), box Expr::Pair(..), ..) => {
+            // this is a lambda definition
+            // kws should contain a fn name and then its args
+            Some(fn_name.clone())
+        }
+        Expr::Pair(box Expr::Keyword(kw, ..), box Expr::Pair(_, box Expr::Nil, ..), ..) => {
+            Some(kw.clone())
+        }
+        _ => return None,
+    }
+}
+fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {
+    exprs.iter().filter_map(get_kw_from_define).collect()
+}
+
 pub fn compile_many_exprs(
     exprs: Vec<Expr>,
     chunk: &mut Chunk,
     env: &mut Vec<String>,
 ) -> CompileResult {
+    let mut defines = get_all_defines(&exprs);
+    env.append(&mut defines);
+
     return exprs.iter().enumerate().try_fold((), |_, (i, expr)| {
         match compile_internal(expr, chunk, env) {
             Ok(_) => {}
