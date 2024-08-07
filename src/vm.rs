@@ -48,7 +48,7 @@ impl Display for VMInstruction {
             VMInstruction::MakeLambda(_, _, params, closeds) => {
                 write!(
                     f,
-                    "MakeLambda(params: {}, closeds: {}",
+                    "MakeLambda(params: {}, closeds: {})",
                     params.join(", "),
                     closeds.join(", ")
                 )
