@@ -51,7 +51,11 @@ fn losta_compile() {
         .unwrap()
         .clone();
         let mut chunk = Chunk { code: vec![] };
-        match compile_internal(&expr, &mut chunk, &mut vec![]) {
+        match compile_internal(
+            &expr,
+            &mut chunk,
+            &mut vec!["get".to_string(), "add".to_string()],
+        ) {
             Ok(..) => chunk.code,
             Err(e) => panic!("Error when compiling {:?}: {:?}", input, e),
         }
@@ -118,9 +122,9 @@ fn losta_compile() {
     );
 
     assert_eq!(
-        parse_and_compile("(f)"),
+        parse_and_compile("(get)"),
         vec![
-            VMInstruction::Lookup("f".to_string()),
+            VMInstruction::Lookup("get".to_string()),
             VMInstruction::Call(0)
         ]
     );
@@ -196,7 +200,7 @@ fn compile_recursive() {
         Err(CompileError {
             message,
             ..
-        }) if message == "xz is  not defined".to_string()
+        }) if message == "xz is not defined".to_string()
     );
     assert_matches!(
         parse_and_compile(

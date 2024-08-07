@@ -162,7 +162,7 @@
       (to-string b))))
 
 (define (reverse x)
-  (def reverse-iter
+  (define reverse-iter
     (lambda (x acc)
       (cond
         ((null? x) acc)

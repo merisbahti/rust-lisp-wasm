@@ -88,7 +88,15 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
             let mut chunk = Chunk { code: vec![] };
 
             let macro_exprs = collect_exprs_from_body(&macro_definition)?;
-            compile_many_exprs(macro_exprs, &mut chunk, &mut vec![])?;
+            let mut macro_env = {
+                let mut macro_env = vec![];
+                macro_env.append(&mut vars.to_vec());
+                if let Some(rest_arg) = variadic {
+                    macro_env.push(rest_arg.clone());
+                }
+                macro_env
+            };
+            compile_many_exprs(macro_exprs, &mut chunk, &mut macro_env)?;
             chunk.code.push(VMInstruction::Return);
 
             let callframe = Callframe {

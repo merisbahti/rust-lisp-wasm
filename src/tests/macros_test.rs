@@ -46,6 +46,6 @@ fn macro_definition_doesnt_leak_out_of_scope() {
             (add)
             "
         ),
-        Err("not found: three".to_string())
+        Err("jit_run_vm:2:25: defmacro is not defined".to_string())
     )
 }

@@ -85,6 +85,14 @@ type CompileResult = Result<(), CompileError>;
 pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
     let globals = HashMap::from([
         (
+            "error".to_string(),
+            BuiltIn::OneArg(|expr| {
+                comp_err!(expr, "{expr}")
+                    .map(|_| expr.clone())
+                    .map_err(|err| format!("{err}"))
+            }),
+        ),
+        (
             "nil?".to_string(),
             BuiltIn::OneArg(|expr| match expr {
                 Expr::Nil => Ok(Expr::bool(true)),

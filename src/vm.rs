@@ -578,7 +578,7 @@ fn compiled_test() {
 (fnB)
         "
         ),
-        Err("not found: y".to_string())
+        Err("jit_run_vm:4:10: y is not defined".to_string())
     );
     assert_eq!(
         jit_run(
@@ -689,11 +689,11 @@ fn compiled_test() {
          Err("jit_run_vm:1:10: rest-dot can only occur as second-to-last argument, but found: (. more extra)".to_string())
     );
     assert_eq!(
-        jit_run("(lambda (. more) stuff)"),
+        jit_run("(lambda (. more) more)"),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
-                    VMInstruction::Lookup("stuff".to_string()),
+                    VMInstruction::Lookup("more".to_string()),
                     VMInstruction::Return
                 ]
             },
@@ -704,11 +704,11 @@ fn compiled_test() {
     );
 
     assert_eq!(
-        jit_run("(lambda (a b . more) stuff)"),
+        jit_run("(lambda (a b . more) more)"),
         Ok(Expr::Lambda(
             Chunk {
                 code: vec![
-                    VMInstruction::Lookup("stuff".to_string()),
+                    VMInstruction::Lookup("more".to_string()),
                     VMInstruction::Return
                 ]
             },
