@@ -167,7 +167,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
         VMInstruction::MakeLambda => {
             let definition_env = callframe.env.clone();
             let (instructions, variadic, kws) = match vm.stack.pop() {
-                Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
+                Some(Expr::LambdaDefinition(instructions, variadic, kws, ..)) => {
                     (instructions, variadic, kws)
                 }
                 stuff => return Err(format!("expected lambda definition, but found: {stuff:#?}",)),

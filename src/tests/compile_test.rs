@@ -2,15 +2,16 @@
 use std::assert_matches::assert_matches;
 
 #[cfg(test)]
+use crate::comp_err;
+#[cfg(test)]
 use crate::compile::compile_internal;
 #[cfg(test)]
 use crate::compile::find_closed_vars_in_fn;
+use crate::compile::get_all_defines;
 #[cfg(test)]
 use crate::compile::{compile_many_exprs, CompileError};
 #[cfg(test)]
 use crate::parse::SrcLoc;
-#[cfg(test)]
-use crate::{comp_err, compile::get_local_variables};
 #[cfg(test)]
 use crate::{
     expr::Expr,
@@ -147,6 +148,7 @@ fn losta_compile() {
                 },
                 None,
                 vec![],
+                vec![],
             )),
             VMInstruction::MakeLambda,
             VMInstruction::Call(0)
@@ -267,6 +269,7 @@ fn lambda_compile_test() {
                     },
                     None,
                     vec![],
+                    vec![],
                 )),
                 VMInstruction::MakeLambda
             ],
@@ -285,6 +288,7 @@ fn lambda_compile_test() {
                         ],
                     },
                     None,
+                    vec![],
                     vec![],
                 )),
                 VMInstruction::MakeLambda,
@@ -306,7 +310,7 @@ fn local_vars_test() {
             message: err,
         })?;
 
-        Ok(get_local_variables(&parsed))
+        Ok(get_all_defines(&parsed))
     }
 
     assert_eq!(
@@ -320,7 +324,7 @@ fn local_vars_test() {
 (define (g) 12)
 ",
         ),
-        Ok(vec!["a", "c", "f", "b", "g"]
+        Ok(vec!["a", "c", "f", "b", "q", "g"]
             .into_iter()
             .map(|x| x.to_string())
             .collect())
@@ -352,7 +356,7 @@ fn close_variables_test() {
             message: err,
         })?;
 
-        let parent_variables = get_local_variables(&parsed);
+        let parent_variables = get_all_defines(&parsed);
         match parsed.last() {
             Some(Expr::Pair(
                 box Expr::Keyword(lambda_kw, ..),
@@ -470,7 +474,7 @@ fn close_variables_test() {
                 column: 16,
                 file_name: Some("close_test".to_string())
             }),
-            message: "undefined variable: not_defined".to_string()
+            message: "not_defined is not defined".to_string()
         })
     );
 }

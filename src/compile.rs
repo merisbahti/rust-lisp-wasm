@@ -70,7 +70,7 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Num(Num { srcloc: s, .. }) => s,
         Expr::Boolean(Bool { srcloc: s, .. }) => s,
         Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
-        Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
+        Expr::LambdaDefinition(..) => todo!("Not implemented src_loc for this lambda-def."),
         Expr::Nil => &Some(SrcLoc {
             line: 13391339,
             column: 0,
@@ -290,24 +290,6 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
     }
 }
 
-pub fn get_local_variables(exprs: &Vec<Expr>) -> Vec<String> {
-    exprs
-        .into_iter()
-        .filter_map(|expr| match expr {
-            Expr::Pair(box Expr::Keyword(kw, ..), box r, ..) if kw == "define" => match r {
-                Expr::Pair(
-                    box Expr::Pair(box Expr::Keyword(fn_name, ..), ..),
-                    box Expr::Pair(..),
-                    ..,
-                ) => Some(fn_name.clone()),
-                Expr::Pair(box Expr::Keyword(kw, ..), box Expr::Pair(..), ..) => Some(kw.clone()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect::<Vec<String>>()
-}
-
 pub fn find_closed_vars_in_fn(
     parent_scope: &Vec<String>,
     fn_args: &Expr,
@@ -316,7 +298,7 @@ pub fn find_closed_vars_in_fn(
     let body = collect_exprs_from_body(fn_body)?;
 
     let lambda_args = collect_kws_from_expr(fn_args)?;
-    let locals = get_local_variables(&body);
+    let locals = get_all_defines(&body);
     let child_scope = vec![lambda_args, locals].concat();
 
     let lambda_parent = parent_scope
@@ -337,7 +319,7 @@ pub fn find_closed_variables(
     // defined since before
     new_definitions: &Vec<String>, // variables being defined since start of recursion
 ) -> Result<Vec<String>, CompileError> {
-    let local_scope = vec![new_definitions.clone(), get_local_variables(exprs)].concat();
+    let local_scope = vec![new_definitions.clone(), get_all_defines(exprs)].concat();
     let mut closed = vec![];
     for expr in exprs {
         match expr {
@@ -358,20 +340,27 @@ pub fn find_closed_variables(
             Expr::Pair(
                 box Expr::Keyword(define_kw, ..),
                 box Expr::Pair(
-                    box Expr::Pair(box Expr::Keyword(_lambda_name, ..), kw_pairs, ..),
+                    box Expr::Pair(box Expr::Keyword(lambda_name, ..), kw_pairs, ..),
                     box lambda_body,
                     ..,
                 ),
                 ..,
             ) if *define_kw == "define".to_string() => {
-                let new_locals =
-                    vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                let new_locals = {
+                    let mut new_locals =
+                        vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                    new_locals.push(lambda_name.clone());
+                    new_locals
+                };
                 let mut closed_in_lambda = find_closed_variables(
                     &collect_exprs_from_body(lambda_body)?,
                     &original_parent_scope,
                     &new_locals,
                 )?;
                 closed.append(&mut closed_in_lambda);
+            }
+            Expr::Pair(box Expr::Keyword(quote_kw, ..), box r, ..) if quote_kw == &"quote" => {
+                // noop
             }
             Expr::Pair(box l, box r, ..) => {
                 let mut closed_in_l =
@@ -385,11 +374,12 @@ pub fn find_closed_variables(
                 if original_parent_scope.contains(kw) {
                     closed.push(kw.clone())
                 } else if local_scope.contains(kw)
-                    || vec!["define", "kw", "+"].contains(&(*kw).as_str())
+                    || BUILTIN_FNS.contains_key(kw)
+                    || SPECIAL_FORMS.contains_key(kw)
                 {
                     // ok
                 } else {
-                    return comp_err!(expr, "undefined variable: {kw}");
+                    return comp_err!(expr, "{kw} is not defined");
                 }
             }
             _ => {}
@@ -442,6 +432,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         }
         lambda_env
     };
+    let closed_variables = find_closed_variables(&body.clone(), &env, &lambda_env)?;
     compile_many_exprs(body.clone(), &mut new_body_chunk, &mut lambda_env)?;
 
     chunk
@@ -450,6 +441,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
             new_body_chunk,
             rest_arg.cloned(),
             kws.to_vec(),
+            closed_variables,
         )));
     chunk.code.push(VMInstruction::MakeLambda);
     Ok(())
@@ -693,7 +685,7 @@ fn get_kw_from_define(expr: &Expr) -> Option<String> {
         _ => return None,
     }
 }
-fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {
+pub fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {
     exprs.iter().filter_map(get_kw_from_define).collect()
 }
 

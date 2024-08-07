@@ -29,7 +29,12 @@ pub enum Expr {
         Option<String>, /* variadic */
         String,         /* env where it was defined*/
     ),
-    LambdaDefinition(Chunk, Option<String> /* variadic? */, Vec<String>),
+    LambdaDefinition(
+        Chunk,
+        Option<String>, /* variadic? */
+        Vec<String>,    // parameters
+        Vec<String>,    // closed-over variables
+    ),
     Nil,
 }
 
@@ -125,7 +130,7 @@ impl PartialEq for Expr {
             (Expr::Lambda(c1, s1, variadic1, d1), Expr::Lambda(c2, s2, variadic2, d2)) => {
                 c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2
             }
-            (Expr::LambdaDefinition(c1, v1, s1), Expr::LambdaDefinition(c2, v2, s2)) => {
+            (Expr::LambdaDefinition(c1, v1, s1, ..), Expr::LambdaDefinition(c2, v2, s2, ..)) => {
                 c1 == c2 && s1 == s2 && v1 == v2
             }
             _ => false,
