@@ -86,7 +86,12 @@ fn losta_compile() {
             },
             None
         )
-        .map(|x| x.0.callframes.first().map(|x| x.chunk.code.clone()).unwrap()),
+        .map(|x| x
+            .0
+            .callframes
+            .first()
+            .map(|x| x.chunk.code.clone())
+            .unwrap()),
         Ok(vec![
             VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::num(1.0)),

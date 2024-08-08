@@ -173,7 +173,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 definition_env,
             ));
         }
-        VMInstruction::MakeLambda(instructions, variadic, kws, _closeds) => {
+        VMInstruction::MakeLambda(instructions, variadic, kws, closeds) => {
             let definition_env = callframe.env.clone();
             vm.stack.push(Expr::Lambda(
                 instructions.clone(),
@@ -191,6 +191,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             let addr = match callframe.env.get(name) {
                 Some(addr) => *addr,
                 None => {
+                    // return Err(format!("Memory not allocated for: {name}"));
                     let new_addr = vm.heap.len();
                     callframe.env.insert(name.clone(), new_addr);
                     new_addr

@@ -82,7 +82,6 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
 type CompileResult = Result<(), CompileError>;
 
 pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
-    
     HashMap::from([
         (
             "error".to_string(),
@@ -429,6 +428,8 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         if let Some(rest_arg) = rest_arg {
             lambda_env.push(rest_arg.clone());
         }
+        let mut defines = get_all_defines(&body);
+        lambda_env.append(&mut defines);
         lambda_env
     };
     let closed_variables = find_closed_variables(&body.clone(), env, &lambda_env)?;

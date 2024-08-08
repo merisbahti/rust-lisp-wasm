@@ -78,8 +78,8 @@ impl Display for Expr {
             Expr::Keyword(x, ..) => write!(formatter, "{x}"),
             Expr::Boolean(Bool { value: x, .. }) => write!(formatter, "{x}"),
             Expr::Quote(xs, _) => write!(formatter, "'{xs:?}"),
-            Expr::Lambda(..) => {
-                write!(formatter, "Lambda(...)")
+            Expr::Lambda(_, args, _, env) => {
+                write!(formatter, "Lambda(args: {args:?}, env: {:?})", env)
             }
             Expr::String(s, _) => {
                 write!(formatter, "{s}")
