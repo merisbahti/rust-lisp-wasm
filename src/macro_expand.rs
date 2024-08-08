@@ -61,7 +61,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                         "macro wrong number of args, expected {} ({}), got: ({})",
                         vars.len(),
                         vars.join(" "),
-                        args.into_iter()
+                        args.iter()
                             .map(|x| format!("{x}"))
                             .collect::<Vec<String>>()
                             .join(" ")

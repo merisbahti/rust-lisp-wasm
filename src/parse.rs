@@ -183,7 +183,7 @@ fn parse_quote(i: Span) -> IResult<Span, Expr, VerboseError<Span>> {
                         file_name: file_name.clone(),
                     }),
                 )),
-                Some((&src_loc).clone()),
+                Some(src_loc.clone()),
             )
         },
     )(i)

@@ -44,7 +44,7 @@ macro_rules! comp_err {
             Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str),
-                    srcloc: crate::compile::extract_srcloc($srcloc)
+                    srcloc: $crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
@@ -54,7 +54,7 @@ macro_rules! comp_err {
             Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str, $($args),*),
-                    srcloc: crate::compile::extract_srcloc($srcloc)
+                    srcloc: $crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
@@ -82,7 +82,8 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
 type CompileResult = Result<(), CompileError>;
 
 pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
-    let globals = HashMap::from([
+    
+    HashMap::from([
         (
             "error".to_string(),
             BuiltIn::OneArg(|expr| {
@@ -208,7 +209,7 @@ pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
         (
             "^".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf((*r).value))),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf(r.value))),
                 _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
@@ -252,8 +253,7 @@ pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
             "to-string".to_string(),
             BuiltIn::OneArg(|expr| Ok(Expr::String(format!("{expr}"), None))),
         ),
-    ]);
-    globals
+    ])
 });
 
 pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, CompileError> {
@@ -298,7 +298,7 @@ pub fn find_closed_vars_in_fn(
 
     let lambda_args = collect_kws_from_expr(fn_args)?;
     let locals = get_all_defines(&body);
-    let child_scope = vec![lambda_args, locals].concat();
+    let child_scope = [lambda_args, locals].concat();
 
     let lambda_parent = parent_scope
         .clone()
@@ -318,7 +318,7 @@ pub fn find_closed_variables(
     // defined since before
     new_definitions: &Vec<String>, // variables being defined since start of recursion
 ) -> Result<Vec<String>, CompileError> {
-    let local_scope = vec![new_definitions.clone(), get_all_defines(exprs)].concat();
+    let local_scope = [new_definitions.clone(), get_all_defines(exprs)].concat();
     let mut closed = vec![];
     for expr in exprs {
         match expr {
@@ -328,10 +328,10 @@ pub fn find_closed_variables(
                 ..,
             ) if *lambda_kw == "lambda".to_string() => {
                 let new_locals =
-                    vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                    [collect_kws_from_expr(kw_pairs)?, new_definitions.clone()].concat();
                 let mut closed_in_lambda = find_closed_variables(
                     &collect_exprs_from_body(lambda_body)?,
-                    &original_parent_scope,
+                    original_parent_scope,
                     &new_locals,
                 )?;
                 closed.append(&mut closed_in_lambda);
@@ -347,13 +347,13 @@ pub fn find_closed_variables(
             ) if *define_kw == "define".to_string() => {
                 let new_locals = {
                     let mut new_locals =
-                        vec![collect_kws_from_expr(&kw_pairs)?, new_definitions.clone()].concat();
+                        [collect_kws_from_expr(kw_pairs)?, new_definitions.clone()].concat();
                     new_locals.push(lambda_name.clone());
                     new_locals
                 };
                 let mut closed_in_lambda = find_closed_variables(
                     &collect_exprs_from_body(lambda_body)?,
-                    &original_parent_scope,
+                    original_parent_scope,
                     &new_locals,
                 )?;
                 closed.append(&mut closed_in_lambda);
@@ -363,9 +363,9 @@ pub fn find_closed_variables(
             }
             Expr::Pair(box l, box r, ..) => {
                 let mut closed_in_l =
-                    find_closed_variables(&vec![l.clone()], &original_parent_scope, &local_scope)?;
+                    find_closed_variables(&vec![l.clone()], original_parent_scope, &local_scope)?;
                 let mut closed_in_r =
-                    find_closed_variables(&vec![r.clone()], &original_parent_scope, &local_scope)?;
+                    find_closed_variables(&vec![r.clone()], original_parent_scope, &local_scope)?;
                 closed.append(&mut closed_in_l);
                 closed.append(&mut closed_in_r);
             }
@@ -431,7 +431,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         }
         lambda_env
     };
-    let closed_variables = find_closed_variables(&body.clone(), &env, &lambda_env)?;
+    let closed_variables = find_closed_variables(&body.clone(), env, &lambda_env)?;
     compile_many_exprs(body.clone(), &mut new_body_chunk, &mut lambda_env)?;
 
     chunk.code.push(VMInstruction::MakeLambda(
@@ -571,10 +571,10 @@ fn make_display(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compil
         Expr::Pair(box displayee, box Expr::Nil, ..) => {
             compile_internal(displayee, chunk, env)?;
             chunk.code.push(VMInstruction::Display);
-            return Ok(());
+            Ok(())
         }
         otherwise => {
-            return comp_err!(
+            comp_err!(
                 expr,
                 "Expected one argument for display, but found {}",
                 otherwise
@@ -584,7 +584,7 @@ fn make_display(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compil
 }
 fn make_apply(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
-    if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
+    if let (Some(function), Some(args), 2) = (exprs.first(), exprs.get(1), exprs.len()) {
         compile_internal(function, chunk, env)?;
         compile_internal(args, chunk, env)?;
         chunk.code.push(VMInstruction::Apply);
@@ -678,7 +678,7 @@ fn get_kw_from_define(expr: &Expr) -> Option<String> {
             box Expr::Pair(box Expr::Keyword(kw, ..), ..),
             ..,
         ) if define_kw == "define" => Some(kw.clone()),
-        _ => return None,
+        _ => None,
     }
 }
 pub fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {

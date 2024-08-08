@@ -85,7 +85,7 @@ fn gc_test() {
     let mut cycles_left = 100000 / 3;
 
     let all_envs = vm.envs.clone().keys().collect::<Vec<&String>>();
-    fn find_envs(expr: &Expr, vec: &mut Vec<String>) -> () {
+    fn find_envs(expr: &Expr, vec: &mut Vec<String>) {
         match expr {
             Expr::Pair(l, r, ..) => {
                 find_envs(l, vec);
@@ -121,21 +121,16 @@ fn gc_test() {
         .callframes
         .clone()
         .into_iter()
-        .map(|x| {
+        .flat_map(|x| {
             let mut vec = vec![];
-            x.chunk.code.into_iter().for_each(|instr| match instr {
-                crate::vm::VMInstruction::Constant(expr) => find_envs(&expr, &mut vec),
-                _ => {}
-            });
+            x.chunk.code.into_iter().for_each(|instr| if let crate::vm::VMInstruction::Constant(expr) = instr { find_envs(&expr, &mut vec) });
             vec
         })
-        .flatten()
         .collect::<Vec<String>>();
     let parent_env_refs = vm
         .envs
         .values()
-        .map(|env| env.parent.clone())
-        .flatten()
+        .filter_map(|env| env.parent.clone())
         .collect::<Vec<String>>();
     let mut expr_refs_in_envs = vec![];
     vm.envs.values().for_each(|env| {

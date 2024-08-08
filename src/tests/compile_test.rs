@@ -86,7 +86,7 @@ fn losta_compile() {
             },
             None
         )
-        .map(|x| x.0.callframes.get(0).map(|x| x.chunk.code.clone()).unwrap()),
+        .map(|x| x.0.callframes.first().map(|x| x.chunk.code.clone()).unwrap()),
         Ok(vec![
             VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::num(1.0)),
@@ -208,7 +208,7 @@ fn compile_recursive() {
         Err(CompileError {
             message,
             ..
-        }) if message == "xz is not defined".to_string()
+        }) if message == *"xz is not defined"
     );
     assert_matches!(
         parse_and_compile(
@@ -359,7 +359,7 @@ fn close_variables_test() {
                 box Expr::Pair(kw_pairs, box lambda_body, ..),
                 ..,
             )) if *lambda_kw == "lambda".to_string() => {
-                find_closed_vars_in_fn(&parent_variables, &kw_pairs, &lambda_body)
+                find_closed_vars_in_fn(&parent_variables, kw_pairs, lambda_body)
             }
             Some(Expr::Pair(
                 box Expr::Keyword(define_kw, ..),
@@ -370,7 +370,7 @@ fn close_variables_test() {
                 ),
                 ..,
             )) if *define_kw == "define".to_string() => {
-                find_closed_vars_in_fn(&parent_variables, &kw_pairs, &lambda_body)
+                find_closed_vars_in_fn(&parent_variables, kw_pairs, lambda_body)
             }
             Some(last) => {
                 comp_err!(
