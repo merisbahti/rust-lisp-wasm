@@ -93,7 +93,6 @@ pub fn run(vm: &mut VM) -> Result<(), String> {
 pub fn step(vm: &mut VM) -> Result<(), String> {
     // let callframes = &mut vm.callframes;
     // let len = callframes.len();
-    let env = &mut vm.heap;
     let callframe = match vm.callframes.last_mut() {
         Some(x) => x,
         _ => return Err("no callframes".to_string()),
@@ -175,11 +174,26 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
         }
         VMInstruction::MakeLambda(instructions, variadic, kws, closeds) => {
             let definition_env = callframe.env.clone();
+            let closed_env = {
+                let mut closed_env: HashMap<String, HeapAddr> = HashMap::new();
+                for closed in closeds {
+                    match definition_env.get(closed) {
+                        Some(addr) => closed_env.insert(closed.clone(), *addr),
+                        None => {
+                            return Err(format!(
+                                "Error when getting closed variable {closed} in def_env: {:?}",
+                                definition_env.keys()
+                            ))
+                        }
+                    };
+                }
+                closed_env
+            };
             vm.stack.push(Expr::Lambda(
                 instructions.clone(),
                 kws.clone(),
                 variadic.clone(),
-                definition_env,
+                closed_env,
             ));
         }
         VMInstruction::Define(name) => {
@@ -299,7 +313,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         ));
                     }
 
-                    let mut map = vars
+                    let mut args_map = vars
                         .iter()
                         .cloned()
                         .zip(args.clone())
@@ -307,21 +321,25 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
 
                     variadic.inspect(|arg_name| {
                         let (_, pairs) = args.split_at(vars.len());
-                        map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
+                        args_map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
                     });
 
-                    let mut callframe_env = closeds.clone();
+                    let mut new_callframe_env = HashMap::new();
 
-                    for (k, v) in map {
+                    for (k, v) in closeds.clone() {
+                        new_callframe_env.insert(k, v);
+                    }
+
+                    for (k, v) in args_map {
                         let new_key = vm.heap.len();
                         vm.heap.insert(new_key, v);
-                        callframe_env.insert(k, new_key);
+                        new_callframe_env.insert(k, new_key);
                     }
 
                     vm.callframes.push(Callframe {
                         ip: 0,
                         chunk: chunk.to_owned(),
-                        env: callframe_env,
+                        env: new_callframe_env,
                     });
                 }
                 found => {
