@@ -1,7 +1,9 @@
 use crate::parse::SrcLoc;
 use crate::vm::Chunk;
+use crate::vm::HeapAddr;
 use core::fmt::Debug;
 use core::fmt::Display;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Num {
@@ -26,8 +28,8 @@ pub enum Expr {
     Lambda(
         Chunk,
         Vec<String>,
-        Option<String>, /* variadic */
-        String,         /* env where it was defined*/
+        Option<String>,            /* variadic */
+        HashMap<String, HeapAddr>, /* env where it was defined*/
     ),
     Nil,
 }
