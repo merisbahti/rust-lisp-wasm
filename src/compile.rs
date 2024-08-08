@@ -557,7 +557,7 @@ fn make_or(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResu
     Ok(())
 }
 
-fn make_quote(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
+fn make_quote(expr: &Expr, chunk: &mut Chunk, _env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
     if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
         chunk.code.push(VMInstruction::Constant(arg.clone()))
