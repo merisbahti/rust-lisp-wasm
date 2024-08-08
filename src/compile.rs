@@ -69,7 +69,7 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Quote(_, s) => s,
         Expr::Num(Num { srcloc: s, .. }) => s,
         Expr::Boolean(Bool { srcloc: s, .. }) => s,
-        Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
+        Expr::Lambda(..) => todo!("Not implemented src_loc for this lambda."),
         Expr::Nil => &Some(SrcLoc {
             line: 13391339,
             column: 0,
@@ -420,6 +420,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
     let (kws, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
 
     let mut new_body_chunk = Chunk { code: vec![] };
+    let locals = get_all_defines(&body);
 
     // find closing over variables
     let mut lambda_env = {
@@ -428,8 +429,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         if let Some(rest_arg) = rest_arg {
             lambda_env.push(rest_arg.clone());
         }
-        let mut defines = get_all_defines(&body);
-        lambda_env.append(&mut defines);
+        lambda_env.append(&mut locals.clone());
         lambda_env
     };
     let closed_variables = find_closed_variables(&body.clone(), env, &lambda_env)?;
@@ -439,6 +439,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         new_body_chunk,
         rest_arg.cloned(),
         kws.to_vec(),
+        locals,
         closed_variables,
     ));
     Ok(())

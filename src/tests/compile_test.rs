@@ -155,6 +155,7 @@ fn losta_compile() {
                 None,
                 vec![],
                 vec![],
+                vec![],
             ),
             VMInstruction::Call(0)
         ]
@@ -274,6 +275,7 @@ fn lambda_compile_test() {
                 None,
                 vec![],
                 vec![],
+                vec![],
             )],
         }
     );
@@ -290,6 +292,7 @@ fn lambda_compile_test() {
                         ],
                     },
                     None,
+                    vec![],
                     vec![],
                     vec![],
                 ),

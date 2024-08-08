@@ -19,6 +19,7 @@ pub enum VMInstruction {
         Chunk,
         Option<String>, /* variadic? */
         Vec<String>,    // parameters
+        Vec<String>,    // locals
         Vec<String>,    // closed-over variables
     ),
     Define(String),
@@ -45,11 +46,12 @@ impl Display for VMInstruction {
             VMInstruction::Display => write!(f, "Display"),
             VMInstruction::PopStack => write!(f, "PopStack"),
             VMInstruction::Apply => write!(f, "Apply"),
-            VMInstruction::MakeLambda(_, _, params, closeds) => {
+            VMInstruction::MakeLambda(_, _, params, locals, closeds) => {
                 write!(
                     f,
-                    "MakeLambda(params: {}, closeds: {})",
+                    "MakeLambda(params: {}, locals: {}, closeds: {})",
                     params.join(", "),
+                    locals.join(", "),
                     closeds.join(", ")
                 )
             }
@@ -168,11 +170,12 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             vm.stack.push(Expr::Lambda(
                 Chunk { code: instructions },
                 vec![],
+                vec![],
                 None,
                 definition_env,
             ));
         }
-        VMInstruction::MakeLambda(instructions, variadic, kws, closeds) => {
+        VMInstruction::MakeLambda(instructions, variadic, kws, locals, closeds) => {
             let definition_env = callframe.env.clone();
             let closed_env = {
                 let mut closed_env: HashMap<String, HeapAddr> = HashMap::new();
@@ -192,6 +195,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             vm.stack.push(Expr::Lambda(
                 instructions.clone(),
                 kws.clone(),
+                locals.clone(),
                 variadic.clone(),
                 closed_env,
             ));
@@ -282,7 +286,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         }
                     }
                 }
-                Some(Expr::Lambda(chunk, vars, variadic, closeds)) => {
+                Some(Expr::Lambda(chunk, vars, locals, variadic, closeds)) => {
                     let is_variadic = variadic.is_some();
 
                     let args = vm
@@ -328,6 +332,12 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
 
                     for (k, v) in closeds.clone() {
                         new_callframe_env.insert(k, v);
+                    }
+
+                    for k in locals.clone() {
+                        let new_key = vm.heap.len();
+                        vm.heap.insert(new_key, Expr::Nil);
+                        new_callframe_env.insert(k, new_key);
                     }
 
                     for (k, v) in args_map {
@@ -718,6 +728,7 @@ fn compiled_test() {
                 ]
             },
             vec![],
+            vec![],
             Some("more".to_string()),
             HashMap::new()
         ))
@@ -733,6 +744,7 @@ fn compiled_test() {
                 ]
             },
             vec!["a".to_string(), "b".to_string()],
+            vec![],
             Some("more".to_string()),
             HashMap::new()
         ))

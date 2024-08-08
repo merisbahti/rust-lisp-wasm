@@ -28,6 +28,7 @@ pub enum Expr {
     Lambda(
         Chunk,
         Vec<String>,
+        Vec<String>,               /* locals */
         Option<String>,            /* variadic */
         HashMap<String, HeapAddr>, /* env where it was defined*/
     ),
@@ -78,8 +79,12 @@ impl Display for Expr {
             Expr::Keyword(x, ..) => write!(formatter, "{x}"),
             Expr::Boolean(Bool { value: x, .. }) => write!(formatter, "{x}"),
             Expr::Quote(xs, _) => write!(formatter, "'{xs:?}"),
-            Expr::Lambda(_, args, _, env) => {
-                write!(formatter, "Lambda(args: {args:?}, env: {:?})", env)
+            Expr::Lambda(_, args, locals, _, env) => {
+                write!(
+                    formatter,
+                    "Lambda(args: {args:?}, {locals:?}, env: {:?})",
+                    env
+                )
             }
             Expr::String(s, _) => {
                 write!(formatter, "{s}")
@@ -120,9 +125,10 @@ impl PartialEq for Expr {
                 true
             }
             (Expr::Nil, Expr::Nil) => true,
-            (Expr::Lambda(c1, s1, variadic1, d1), Expr::Lambda(c2, s2, variadic2, d2)) => {
-                c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2
-            }
+            (
+                Expr::Lambda(c1, s1, locals1, variadic1, d1),
+                Expr::Lambda(c2, s2, locals2, variadic2, d2),
+            ) => c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2 && locals1 == locals2,
             _ => false,
         }
     }
