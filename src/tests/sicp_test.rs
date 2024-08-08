@@ -11,7 +11,6 @@ fn test_sicp() {
     let dir = include_dir!("./sicp");
     let files = dir
         .files()
-        .into_iter()
         .map(|x| (x.path().to_str().unwrap(), x.contents_utf8().unwrap()))
         .collect::<Vec<(&str, &str)>>();
 
@@ -49,7 +48,6 @@ fn test_sicp() {
 
     assert_eq!(
         dir.files()
-            .into_iter()
             .map(|x| (x.path().to_str().unwrap(), x.contents_utf8().unwrap()))
             .collect::<Vec<(&str, &str)>>()
             .len(),
