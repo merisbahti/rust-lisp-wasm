@@ -334,15 +334,15 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         new_callframe_env.insert(k, v);
                     }
 
-                    for k in locals.clone() {
-                        let new_key = vm.heap.len();
-                        vm.heap.insert(new_key, Expr::Nil);
-                        new_callframe_env.insert(k, new_key);
-                    }
-
                     for (k, v) in args_map {
                         let new_key = vm.heap.len();
                         vm.heap.insert(new_key, v);
+                        new_callframe_env.insert(k, new_key);
+                    }
+
+                    for k in locals.clone() {
+                        let new_key = vm.heap.len();
+                        vm.heap.insert(new_key, Expr::Nil);
                         new_callframe_env.insert(k, new_key);
                     }
 
