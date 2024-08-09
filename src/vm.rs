@@ -463,17 +463,17 @@ pub fn prepare_vm(
 
     let defines = get_all_defines(&exprs);
 
+    for (k, v) in compiler_env.env.iter() {
+        let heap_addr = vm.heap.len();
+        vm.heap.insert(heap_addr, v.clone());
+        callframe.env.insert(k.clone(), heap_addr);
+    }
+
     for name in defines {
         let addr = vm.heap.len();
         vm.heap.insert(addr, Expr::Nil);
         callframe.env.insert(name.clone(), addr);
         vm.exports.insert(name, addr);
-    }
-
-    for (k, v) in compiler_env.env.iter() {
-        let heap_addr = vm.heap.len();
-        vm.heap.insert(heap_addr, v.clone());
-        callframe.env.insert(k.clone(), heap_addr);
     }
 
     vm.callframes.push(callframe);
