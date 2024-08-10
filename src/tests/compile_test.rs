@@ -4,9 +4,13 @@ use std::assert_matches::assert_matches;
 #[cfg(test)]
 use crate::comp_err;
 #[cfg(test)]
+use crate::compile::collect_exprs_from_body;
+#[cfg(test)]
+use crate::compile::collect_kws_from_expr;
+#[cfg(test)]
 use crate::compile::compile_internal;
 #[cfg(test)]
-use crate::compile::find_closed_vars_in_fn;
+use crate::compile::find_closed_variables;
 #[cfg(test)]
 use crate::compile::get_all_defines;
 #[cfg(test)]
@@ -350,6 +354,28 @@ fn local_vars_test() {
 }
 #[test]
 fn close_variables_test() {
+    pub fn find_closed_vars_in_fn(
+        parent_scope: &Vec<String>,
+        fn_args: &Expr,
+        fn_body: &Expr,
+    ) -> Result<Vec<String>, CompileError> {
+        let body = collect_exprs_from_body(fn_body)?;
+
+        let lambda_args = collect_kws_from_expr(fn_args)?;
+        let locals = get_all_defines(&body);
+        let child_scope = [lambda_args, locals].concat();
+
+        let lambda_parent = parent_scope
+            .clone()
+            .into_iter()
+            .filter(|x| !child_scope.contains(x))
+            .collect::<Vec<String>>();
+
+        // remove the globals that exist as args
+
+        find_closed_variables(&body, &lambda_parent, &child_scope)
+    }
+
     fn parse_and_close(input: &str) -> Result<Vec<String>, CompileError> {
         let parsed = crate::parse::parse(&crate::parse::ParseInput {
             source: input,

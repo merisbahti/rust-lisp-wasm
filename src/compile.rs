@@ -288,28 +288,6 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
     }
 }
 
-pub fn find_closed_vars_in_fn(
-    parent_scope: &Vec<String>,
-    fn_args: &Expr,
-    fn_body: &Expr,
-) -> Result<Vec<String>, CompileError> {
-    let body = collect_exprs_from_body(fn_body)?;
-
-    let lambda_args = collect_kws_from_expr(fn_args)?;
-    let locals = get_all_defines(&body);
-    let child_scope = [lambda_args, locals].concat();
-
-    let lambda_parent = parent_scope
-        .clone()
-        .into_iter()
-        .filter(|x| !child_scope.contains(x))
-        .collect::<Vec<String>>();
-
-    // remove the globals that exist as args
-
-    find_closed_variables(&body, &lambda_parent, &child_scope)
-}
-
 // internal fn that finds closed variables.
 pub fn find_closed_variables(
     exprs: &Vec<Expr>,
