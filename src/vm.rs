@@ -209,10 +209,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             let addr = match callframe.env.get(name) {
                 Some(addr) => *addr,
                 None => {
-                    // return Err(format!("Memory not allocated for: {name}"));
-                    let new_addr = vm.heap.len();
-                    callframe.env.insert(name.clone(), new_addr);
-                    new_addr
+                    return Err(format!("Heap addr not allocated for: {name}"));
                 }
             };
 
