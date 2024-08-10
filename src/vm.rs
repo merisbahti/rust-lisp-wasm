@@ -426,7 +426,8 @@ fn test_add() {
 pub type Macros = HashMap<String, MacroFn>;
 #[derive(Default, Clone)]
 pub struct CompilerEnv {
-    pub env: HashMap<String, Expr>,
+    pub env: HashMap<String, usize>,
+    pub heap: HashMap<usize, Expr>,
     pub macros: Macros,
 }
 
@@ -443,6 +444,8 @@ pub fn prepare_vm(
 
     let mut vm = VM::default();
 
+    vm.heap = compiler_env.heap.clone();
+
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
@@ -455,22 +458,18 @@ pub fn prepare_vm(
     let mut callframe = Callframe {
         ip: 0,
         chunk,
-        env: HashMap::new(),
+        env: compiler_env.env.clone(),
     };
 
     let defines = get_all_defines(&exprs);
 
-    for (k, v) in compiler_env.env.iter() {
-        let heap_addr = vm.heap.len();
-        vm.heap.insert(heap_addr, v.clone());
-        callframe.env.insert(k.clone(), heap_addr);
-    }
-
     for name in defines {
-        let addr = vm.heap.len();
-        vm.heap.insert(addr, Expr::Nil);
-        callframe.env.insert(name.clone(), addr);
-        vm.exports.insert(name, addr);
+        if !compiler_env.env.contains_key(&name) {
+            let addr = vm.heap.len();
+            vm.heap.insert(addr, Expr::Nil);
+            callframe.env.insert(name.clone(), addr);
+            vm.exports.insert(name, addr);
+        }
     }
 
     vm.callframes.push(callframe);
@@ -528,13 +527,9 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         ));
     }
 
-    let resolved_exports = vm
-        .exports
-        .iter()
-        .map(|(k, v)| (k.clone(), vm.heap.get(v).unwrap().clone()))
-        .collect::<HashMap<String, Expr>>();
     Ok(CompilerEnv {
-        env: resolved_exports,
+        env: vm.exports,
+        heap: vm.heap,
         macros,
     })
 }

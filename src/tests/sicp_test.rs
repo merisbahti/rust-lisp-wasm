@@ -30,6 +30,7 @@ fn test_sicp() {
                     },
                     Some(CompilerEnv {
                         env: prelude.env.clone(),
+                        heap: prelude.heap.clone(),
                         macros: prelude.macros.clone(),
                     }),
                 )

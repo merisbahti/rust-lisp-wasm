@@ -84,14 +84,6 @@ pub fn app() -> Html {
 
     let source = (*source_handle).clone();
     fn prepare_with_prelude(src: &str) -> Result<VM, String> {
-        return prepare_vm(
-            &crate::parse::ParseInput {
-                source: src,
-                file_name: Some("app"),
-            },
-            None,
-        )
-        .map(|x| x.0);
         match get_prelude() {
             Ok(prelude) => prepare_vm(
                 &crate::parse::ParseInput {
