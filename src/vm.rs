@@ -1,5 +1,5 @@
 use crate::{
-    compile::{collect_exprs_from_body, MacroFn, BUILTIN_FNS},
+    compile::{collect_exprs_from_body, get_all_defines, MacroFn, BUILTIN_FNS},
     expr::{Bool, Num},
     macro_expand::macro_expand,
     parse::{make_pair_from_vec, ParseInput},
@@ -15,7 +15,13 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum VMInstruction {
     Lookup(String),
-    MakeLambda,
+    MakeLambda(
+        Chunk,
+        Option<String>, /* variadic? */
+        Vec<String>,    // parameters
+        Vec<String>,    // locals
+        Vec<String>,    // closed-over variables
+    ),
     Define(String),
     PopStack,
     Apply,
@@ -40,29 +46,34 @@ impl Display for VMInstruction {
             VMInstruction::Display => write!(f, "Display"),
             VMInstruction::PopStack => write!(f, "PopStack"),
             VMInstruction::Apply => write!(f, "Apply"),
-            VMInstruction::MakeLambda => write!(f, "MakeLambda"),
+            VMInstruction::MakeLambda(_, _, params, locals, closeds) => {
+                write!(
+                    f,
+                    "MakeLambda(params: {}, locals: {}, closeds: {})",
+                    params.join(", "),
+                    locals.join(", "),
+                    closeds.join(", ")
+                )
+            }
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Default)]
-pub struct Env {
-    pub map: HashMap<String, Expr>,
-    pub parent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Callframe {
     pub ip: usize,
     pub chunk: Chunk,
-    pub env: String,
+    pub env: HashMap<String, HeapAddr>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+pub type HeapAddr = usize;
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct VM {
     pub callframes: Vec<Callframe>,
     pub stack: Vec<Expr>,
-    pub envs: HashMap<String, Env>,
+    pub heap: HashMap<HeapAddr, Expr>,
+    pub exports: HashMap<String, HeapAddr>,
     pub log: Vec<String>,
 }
 
@@ -84,7 +95,6 @@ pub fn run(vm: &mut VM) -> Result<(), String> {
 pub fn step(vm: &mut VM) -> Result<(), String> {
     // let callframes = &mut vm.callframes;
     // let len = callframes.len();
-    let envs = &mut vm.envs;
     let callframe = match vm.callframes.last_mut() {
         Some(x) => x,
         _ => return Err("no callframes".to_string()),
@@ -160,20 +170,35 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
             vm.stack.push(Expr::Lambda(
                 Chunk { code: instructions },
                 vec![],
+                vec![],
                 None,
                 definition_env,
             ));
         }
-        VMInstruction::MakeLambda => {
+        VMInstruction::MakeLambda(instructions, variadic, kws, locals, closeds) => {
             let definition_env = callframe.env.clone();
-            let (instructions, variadic, kws) = match vm.stack.pop() {
-                Some(Expr::LambdaDefinition(instructions, variadic, kws)) => {
-                    (instructions, variadic, kws)
+            let closed_env = {
+                let mut closed_env: HashMap<String, HeapAddr> = HashMap::new();
+                for closed in closeds {
+                    match definition_env.get(closed) {
+                        Some(addr) => closed_env.insert(closed.clone(), *addr),
+                        None => {
+                            return Err(format!(
+                                "Error when getting closed variable {closed} in def_env: {:?}",
+                                definition_env.keys()
+                            ))
+                        }
+                    };
                 }
-                stuff => return Err(format!("expected lambda definition, but found: {stuff:#?}",)),
+                closed_env
             };
-            vm.stack
-                .push(Expr::Lambda(instructions, kws, variadic, definition_env));
+            vm.stack.push(Expr::Lambda(
+                instructions.clone(),
+                kws.clone(),
+                locals.clone(),
+                variadic.clone(),
+                closed_env,
+            ));
         }
         VMInstruction::Define(name) => {
             let definee = match vm.stack.pop() {
@@ -181,43 +206,32 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                 None => return Err("no value to define".to_string()),
             };
 
-            let env = match envs.get_mut(&callframe.env) {
-                Some(env) => env,
-                _ => return Err("env missing for callframe".to_string()),
+            let addr = match callframe.env.get(name) {
+                Some(addr) => *addr,
+                None => {
+                    return Err(format!("Heap addr not allocated for: {name}"));
+                }
             };
-            env.map.insert(name.clone(), definee);
+
+            vm.heap.insert(addr, definee);
         }
         VMInstruction::Lookup(name) => {
-            fn lookup_env(
-                name: String,
-                env_name: String,
-                envs: &HashMap<String, Env>,
-            ) -> Option<Expr> {
-                let env = match envs.get(&env_name) {
-                    Some(env) => env,
-                    None => panic!("env not found for callframe!!!"),
-                };
-                let parent = env.parent.clone();
-                env.map
-                    .get(&name)
-                    .cloned()
-                    .or_else(|| match parent {
-                        Some(parent_name) => lookup_env(name.clone(), parent_name, envs),
-                        None => None,
-                    })
-                    .or_else(|| {
-                        BUILTIN_FNS
-                            .get(&name)
-                            .map(|_| Expr::Keyword(name.clone(), None))
-                    })
-            }
+            let lookup = callframe
+                .env
+                .get(name)
+                .and_then(|heap_addr| vm.heap.get(heap_addr).cloned())
+                .or_else(|| {
+                    BUILTIN_FNS
+                        .get(name)
+                        .map(|_| Expr::Keyword(name.clone(), None))
+                });
 
-            match lookup_env(name.to_string(), callframe.env.clone(), envs) {
-                Some(instructions) => {
-                    vm.stack.push(instructions.clone());
+            match lookup {
+                Some(expr) => {
+                    vm.stack.push(expr.clone());
                     return Ok(());
                 }
-                None => return Err(format!("not found: {name}",)),
+                None => return Err(format!("not found: {name}, {:#?}", callframe.env)),
             };
         }
         VMInstruction::Call(arity) => {
@@ -269,8 +283,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         }
                     }
                 }
-                Some(Expr::Lambda(chunk, vars, variadic, definition_env)) => {
-                    let new_env_name = (envs.len() + 1).to_string();
+                Some(Expr::Lambda(chunk, vars, locals, variadic, closeds)) => {
                     let is_variadic = variadic.is_some();
 
                     let args = vm
@@ -301,7 +314,7 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
                         ));
                     }
 
-                    let mut map = vars
+                    let mut args_map = vars
                         .iter()
                         .cloned()
                         .zip(args.clone())
@@ -309,22 +322,31 @@ pub fn step(vm: &mut VM) -> Result<(), String> {
 
                     variadic.inspect(|arg_name| {
                         let (_, pairs) = args.split_at(vars.len());
-                        map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
+                        args_map.insert(arg_name.clone(), make_pair_from_vec(pairs.to_vec()));
                     });
 
-                    envs.insert(
-                        new_env_name.to_string(),
-                        Env {
-                            map,
-                            parent: Some(definition_env),
-                            // parent: None,
-                        },
-                    );
+                    let mut new_callframe_env = HashMap::new();
+
+                    for (k, v) in closeds.clone() {
+                        new_callframe_env.insert(k, v);
+                    }
+
+                    for (k, v) in args_map {
+                        let new_key = vm.heap.len();
+                        vm.heap.insert(new_key, v);
+                        new_callframe_env.insert(k, new_key);
+                    }
+
+                    for k in locals.clone() {
+                        let new_key = vm.heap.len();
+                        vm.heap.insert(new_key, Expr::Nil);
+                        new_callframe_env.insert(k, new_key);
+                    }
 
                     vm.callframes.push(Callframe {
                         ip: 0,
                         chunk: chunk.to_owned(),
-                        env: new_env_name.to_string(),
+                        env: new_callframe_env,
                     });
                 }
                 found => {
@@ -390,10 +412,10 @@ fn test_add() {
     let callframe = Callframe {
         ip: 0,
         chunk,
-        env: "none".to_string(),
+        env: HashMap::new(),
     };
 
-    let mut vm = get_initial_vm_and_chunk(Env::default());
+    let mut vm = VM::default();
     vm.callframes.push(callframe);
 
     assert!(run(&mut vm).is_ok());
@@ -401,19 +423,11 @@ fn test_add() {
     debug_assert_eq!(vm.stack, vec![Expr::num(3.0)])
 }
 
-pub fn get_initial_vm_and_chunk(initial_env: Env) -> VM {
-    VM {
-        callframes: vec![],
-        stack: vec![],
-        envs: HashMap::from([("initial_env".to_string(), initial_env)]),
-        log: Vec::new(),
-    }
-}
-
 pub type Macros = HashMap<String, MacroFn>;
 #[derive(Default, Clone)]
 pub struct CompilerEnv {
-    pub env: Env,
+    pub env: HashMap<String, usize>,
+    pub heap: HashMap<usize, Expr>,
     pub macros: Macros,
 }
 
@@ -422,32 +436,42 @@ pub fn prepare_vm(
     initial_env: Option<CompilerEnv>,
 ) -> Result<(VM, Macros), String> {
     let compiler_env = initial_env.unwrap_or_default();
+
     let exprs = match parse::parse(input) {
         Ok(res) => res,
         Err(err) => return Err(err),
     };
 
-    let mut vm = get_initial_vm_and_chunk(compiler_env.env.clone());
+    let mut vm = VM::default();
+
+    vm.heap = compiler_env.heap.clone();
 
     let mut chunk = Chunk { code: vec![] };
 
     let mut macros = compiler_env.macros.clone();
-    let macro_expanded = macro_expand(exprs, &mut macros).map_err(|x| x.to_string())?;
-    let initial_env_keys = compiler_env
-        .env
-        .map
-        .keys()
-        .cloned()
-        .collect::<Vec<String>>();
+    let macro_expanded = macro_expand(&exprs, &mut macros).map_err(|x| x.to_string())?;
+    let initial_env_keys = compiler_env.env.keys().cloned().collect::<Vec<String>>();
 
     compile_many_exprs(macro_expanded, &mut chunk, &mut initial_env_keys.clone())
         .map_err(|err| format!("{err}"))?;
 
-    let callframe = Callframe {
+    let mut callframe = Callframe {
         ip: 0,
         chunk,
-        env: "initial_env".to_string(),
+        env: compiler_env.env.clone(),
     };
+
+    let defines = get_all_defines(&exprs);
+
+    for name in defines {
+        if !compiler_env.env.contains_key(&name) {
+            let addr = vm.heap.len();
+            vm.heap.insert(addr, Expr::Nil);
+            callframe.env.insert(name.clone(), addr);
+            vm.exports.insert(name, addr);
+        }
+    }
+
     vm.callframes.push(callframe);
 
     Ok((vm, macros))
@@ -503,13 +527,11 @@ pub fn get_prelude() -> Result<CompilerEnv, String> {
         ));
     }
 
-    match vm.envs.get("initial_env") {
-        Some(env) => Ok(CompilerEnv {
-            env: env.clone(),
-            macros,
-        }),
-        None => Err("Could not find initial env when compiling prelude.".to_string()),
-    }
+    Ok(CompilerEnv {
+        env: vm.exports,
+        heap: vm.heap,
+        macros,
+    })
 }
 
 #[test]
@@ -698,8 +720,9 @@ fn compiled_test() {
                 ]
             },
             vec![],
+            vec![],
             Some("more".to_string()),
-            "initial_env".to_string()
+            HashMap::new()
         ))
     );
 
@@ -713,8 +736,9 @@ fn compiled_test() {
                 ]
             },
             vec!["a".to_string(), "b".to_string()],
+            vec![],
             Some("more".to_string()),
-            "initial_env".to_string()
+            HashMap::new()
         ))
     );
 

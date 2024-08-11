@@ -70,6 +70,14 @@ pub fn app() -> Html {
         "(if 1 2 3 )".to_string(),
         "(or false true)".to_string(),
         "(and true true)".to_string(),
+        "(define (f) f) (f) ".to_string(),
+        "
+(define (f) 
+    (define (g) g)
+    (g))
+(f)
+            "
+        .to_string(),
     ];
 
     let source_handle = use_state(|| fib.last().cloned().unwrap_or("not found".to_string()));

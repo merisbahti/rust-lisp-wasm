@@ -3,14 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use crate::comp_err;
 use crate::compile::{
     collect_exprs_from_body, collect_kws_from_expr, compile_many_exprs, extract_srcloc,
-    CompileError,
+    get_all_defines, CompileError,
 };
 use crate::parse::make_pair_from_vec;
-use crate::vm::{run, Callframe};
+use crate::vm::{run, Callframe, VM};
 use crate::{
     compile::MacroFn,
     expr::Expr,
-    vm::{get_initial_vm_and_chunk, Chunk, Env, VMInstruction},
+    vm::{Chunk, VMInstruction},
 };
 
 pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
@@ -33,8 +33,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                         &macro_definition,
                         "rest-dot can only occur as second-to-last argument, but found: ({})",
                         all_kws.join(" ")
-                    )
-                    .map(|_| Expr::Nil);
+                    );
                 }
             };
 
@@ -62,7 +61,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                         "macro wrong number of args, expected {} ({}), got: ({})",
                         vars.len(),
                         vars.join(" "),
-                        args.into_iter()
+                        args.iter()
                             .map(|x| format!("{x}"))
                             .collect::<Vec<String>>()
                             .join(" ")
@@ -81,9 +80,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                 map.insert(arg_name.clone().clone(), make_pair_from_vec(pairs.to_vec()));
             });
 
-            let initial_env = Env { map, parent: None };
-
-            let mut vm = get_initial_vm_and_chunk(initial_env);
+            let mut vm = VM::default();
 
             let mut chunk = Chunk { code: vec![] };
 
@@ -96,13 +93,28 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                 }
                 macro_env
             };
-            compile_many_exprs(macro_exprs, &mut chunk, &mut macro_env)?;
+            compile_many_exprs(macro_exprs.clone(), &mut chunk, &mut macro_env)?;
             chunk.code.push(VMInstruction::Return);
+
+            let mut callframe_env = HashMap::new();
+
+            for (k, v) in map {
+                let new_key = vm.heap.len();
+                vm.heap.insert(new_key, v);
+                callframe_env.insert(k, new_key);
+            }
+
+            let defines = get_all_defines(&macro_exprs);
+            for k in defines {
+                let new_key = vm.heap.len();
+                vm.heap.insert(new_key, Expr::Nil);
+                callframe_env.insert(k, new_key);
+            }
 
             let callframe = Callframe {
                 ip: 0,
                 chunk,
-                env: "initial_env".to_string(),
+                env: callframe_env,
             };
             // add params and args in vm envs (unevaluated)
             vm.callframes.push(callframe);
@@ -113,8 +125,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                     return comp_err!(
                         &macro_definition,
                         "Error when running macro expansion: {err}"
-                    )
-                    .map(|_| Expr::Nil);
+                    );
                 }
             };
 
@@ -124,8 +135,7 @@ pub fn make_macro(params: &[String], macro_definition: &Expr) -> MacroFn {
                     &macro_definition,
                     "expected one value on the stack, got {:#?}",
                     vm.stack
-                )
-                .map(|_| Expr::Nil),
+                ),
             }
         }
     })
@@ -203,12 +213,12 @@ pub fn macro_expand_one(
         ) if let (None, "macroexpand", "quote") =
             (argmacros.get(kw), macroexpand.as_str(), quote.as_str()) =>
         {
-            comp_err!(expr, "macro not found: {kw}").map(|_| Expr::Nil)
+            comp_err!(expr, "macro not found: {kw}")
         }
         Expr::Pair(box Expr::Keyword(macroexpand, ..), rest, ..)
             if let "macroexpand" = (macroexpand.as_str()) =>
         {
-            comp_err!(expr, "can't call macroexpand on {rest}").map(|_| Expr::Nil)
+            comp_err!(expr, "can't call macroexpand on {rest}")
         }
         pair @ Expr::Pair(..) => {
             let exprs = collect_exprs_from_body(pair)?;
@@ -223,7 +233,7 @@ pub fn macro_expand_one(
 }
 
 pub fn macro_expand(
-    exprs: Vec<Expr>,
+    exprs: &Vec<Expr>,
     macros: &mut HashMap<String, MacroFn>,
 ) -> Result<Vec<Expr>, CompileError> {
     let mut expanded_exprs = Vec::new();
@@ -263,7 +273,7 @@ fn expansion_noop_test() {
                 source: input,
                 file_name: Some("expansion_noop_test")
             })
-            .and_then(|parsed| macro_expand(parsed, macros).map_err(|err| format!("{err}")))
+            .and_then(|parsed| macro_expand(&parsed, macros).map_err(|err| format!("{err}")))
             .unwrap(),
             parse(&crate::parse::ParseInput {
                 source: input,
@@ -294,7 +304,7 @@ fn expansion_test() {
                 source: input,
                 file_name: Some("expansion_test")
             })
-            .and_then(|parsed| macro_expand(parsed, macros).map_err(|x| x.to_string())),
+            .and_then(|parsed| macro_expand(&parsed, macros).map_err(|x| x.to_string())),
             Ok(vec![expected.clone()])
         )
     }

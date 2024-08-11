@@ -1,7 +1,9 @@
 use crate::parse::SrcLoc;
 use crate::vm::Chunk;
+use crate::vm::HeapAddr;
 use core::fmt::Debug;
 use core::fmt::Display;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Num {
@@ -26,10 +28,10 @@ pub enum Expr {
     Lambda(
         Chunk,
         Vec<String>,
-        Option<String>, /* variadic */
-        String,         /* env where it was defined*/
+        Vec<String>,               /* locals */
+        Option<String>,            /* variadic */
+        HashMap<String, HeapAddr>, /* closed variables */
     ),
-    LambdaDefinition(Chunk, Option<String> /* variadic? */, Vec<String>),
     Nil,
 }
 
@@ -77,14 +79,15 @@ impl Display for Expr {
             Expr::Keyword(x, ..) => write!(formatter, "{x}"),
             Expr::Boolean(Bool { value: x, .. }) => write!(formatter, "{x}"),
             Expr::Quote(xs, _) => write!(formatter, "'{xs:?}"),
-            Expr::Lambda(..) => {
-                write!(formatter, "Lambda(...)")
+            Expr::Lambda(_, args, locals, _, env) => {
+                write!(
+                    formatter,
+                    "Lambda(args: {args:?}, {locals:?}, env: {:?})",
+                    env
+                )
             }
             Expr::String(s, _) => {
                 write!(formatter, "{s}")
-            }
-            Expr::LambdaDefinition(..) => {
-                write!(formatter, "LambdaDefinition(...)")
             }
         }
     }
@@ -122,12 +125,10 @@ impl PartialEq for Expr {
                 true
             }
             (Expr::Nil, Expr::Nil) => true,
-            (Expr::Lambda(c1, s1, variadic1, d1), Expr::Lambda(c2, s2, variadic2, d2)) => {
-                c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2
-            }
-            (Expr::LambdaDefinition(c1, v1, s1), Expr::LambdaDefinition(c2, v2, s2)) => {
-                c1 == c2 && s1 == s2 && v1 == v2
-            }
+            (
+                Expr::Lambda(c1, s1, locals1, variadic1, d1),
+                Expr::Lambda(c2, s2, locals2, variadic2, d2),
+            ) => c1 == c2 && s1 == s2 && d1 == d2 && variadic1 == variadic2 && locals1 == locals2,
             _ => false,
         }
     }

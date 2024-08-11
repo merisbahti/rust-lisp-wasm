@@ -41,20 +41,20 @@ impl Display for CompileError {
 macro_rules! comp_err {
     ($srcloc:expr, $fmt_str:literal) => {
         {
-            Result::<(), CompileError>::Err(
+            Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str),
-                    srcloc: extract_srcloc($srcloc)
+                    srcloc: $crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
     };
     ($srcloc:expr, $fmt_str:literal, $($args:expr),*) => {
         {
-            Result::<(), CompileError>::Err(
+            Result::<_, CompileError>::Err(
                 CompileError {
                     message: format!($fmt_str, $($args),*),
-                    srcloc: extract_srcloc($srcloc)
+                    srcloc: $crate::compile::extract_srcloc($srcloc)
                 }
             )
         }
@@ -69,8 +69,7 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
         Expr::Quote(_, s) => s,
         Expr::Num(Num { srcloc: s, .. }) => s,
         Expr::Boolean(Bool { srcloc: s, .. }) => s,
-        Expr::Lambda(_, _, _, _) => todo!("Not implemented src_loc for this lambda."),
-        Expr::LambdaDefinition(_, _, _) => todo!("Not implemented src_loc for this lambda-def."),
+        Expr::Lambda(..) => todo!("Not implemented src_loc for this lambda."),
         Expr::Nil => &Some(SrcLoc {
             line: 13391339,
             column: 0,
@@ -83,12 +82,12 @@ pub fn extract_srcloc(expr: &Expr) -> Option<SrcLoc> {
 type CompileResult = Result<(), CompileError>;
 
 pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
-    let globals = HashMap::from([
+    HashMap::from([
         (
             "error".to_string(),
             BuiltIn::OneArg(|expr| {
                 comp_err!(expr, "{expr}")
-                    .map(|_| expr.clone())
+                    .map(|_: Expr| expr.clone())
                     .map_err(|err| format!("{err}"))
             }),
         ),
@@ -209,7 +208,7 @@ pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
         (
             "^".to_string(),
             BuiltIn::TwoArg(|l, r| match (l, r) {
-                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf((*r).value))),
+                (Expr::Num(l), Expr::Num(r)) => Ok(Expr::num(l.value.powf(r.value))),
                 _ => Err(format!("Expected numbers, found: {} and {}", l, r)),
             }),
         ),
@@ -253,8 +252,7 @@ pub static BUILTIN_FNS: Lazy<HashMap<String, BuiltIn>> = Lazy::new(|| {
             "to-string".to_string(),
             BuiltIn::OneArg(|expr| Ok(Expr::String(format!("{expr}"), None))),
         ),
-    ]);
-    globals
+    ])
 });
 
 pub fn collect_kws_from_expr(expr: &Expr) -> Result<Vec<String>, CompileError> {
@@ -289,6 +287,83 @@ pub fn collect_exprs_from_body(expr: &Expr) -> Result<Vec<Expr>, CompileError> {
         }),
     }
 }
+
+// internal fn that finds closed variables.
+pub fn find_closed_variables(
+    exprs: &Vec<Expr>,
+    original_parent_scope: &Vec<String>, // variables already defined before
+    // defined since before
+    new_definitions: &Vec<String>, // variables being defined since start of recursion
+) -> Result<Vec<String>, CompileError> {
+    let local_scope = [new_definitions.clone(), get_all_defines(exprs)].concat();
+    let mut closed = vec![];
+    for expr in exprs {
+        match expr {
+            Expr::Pair(
+                box Expr::Keyword(lambda_kw, ..),
+                box Expr::Pair(kw_pairs, box lambda_body, ..),
+                ..,
+            ) if *lambda_kw == "lambda".to_string() => {
+                let new_locals =
+                    [collect_kws_from_expr(kw_pairs)?, new_definitions.clone()].concat();
+                let mut closed_in_lambda = find_closed_variables(
+                    &collect_exprs_from_body(lambda_body)?,
+                    original_parent_scope,
+                    &new_locals,
+                )?;
+                closed.append(&mut closed_in_lambda);
+            }
+            Expr::Pair(
+                box Expr::Keyword(define_kw, ..),
+                box Expr::Pair(
+                    box Expr::Pair(box Expr::Keyword(lambda_name, ..), kw_pairs, ..),
+                    box lambda_body,
+                    ..,
+                ),
+                ..,
+            ) if *define_kw == "define".to_string() => {
+                let new_locals = {
+                    let mut new_locals =
+                        [collect_kws_from_expr(kw_pairs)?, new_definitions.clone()].concat();
+                    new_locals.push(lambda_name.clone());
+                    new_locals
+                };
+                let mut closed_in_lambda = find_closed_variables(
+                    &collect_exprs_from_body(lambda_body)?,
+                    original_parent_scope,
+                    &new_locals,
+                )?;
+                closed.append(&mut closed_in_lambda);
+            }
+            Expr::Pair(box Expr::Keyword(quote_kw, ..), box _, ..) if quote_kw == &"quote" => {
+                // noop
+            }
+            Expr::Pair(box l, box r, ..) => {
+                let mut closed_in_l =
+                    find_closed_variables(&vec![l.clone()], original_parent_scope, &local_scope)?;
+                let mut closed_in_r =
+                    find_closed_variables(&vec![r.clone()], original_parent_scope, &local_scope)?;
+                closed.append(&mut closed_in_l);
+                closed.append(&mut closed_in_r);
+            }
+            Expr::Keyword(kw, ..) => {
+                if original_parent_scope.contains(kw) {
+                    closed.push(kw.clone())
+                } else if local_scope.contains(kw)
+                    || BUILTIN_FNS.contains_key(kw)
+                    || SPECIAL_FORMS.contains_key(kw)
+                {
+                    // ok
+                } else {
+                    return comp_err!(expr, "{kw} is not defined");
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(closed)
+}
+
 fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let (pairs, unextracted_body) = match expr {
         Expr::Pair(pairs @ box Expr::Nil, body @ box Expr::Pair(..), ..) => (pairs, body),
@@ -323,6 +398,7 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
     let (kws, _) = all_kws.split_at(dot_kw.unwrap_or(all_kws.len()));
 
     let mut new_body_chunk = Chunk { code: vec![] };
+    let locals = get_all_defines(&body);
 
     // find closing over variables
     let mut lambda_env = {
@@ -331,18 +407,19 @@ fn make_lambda(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compile
         if let Some(rest_arg) = rest_arg {
             lambda_env.push(rest_arg.clone());
         }
+        lambda_env.append(&mut locals.clone());
         lambda_env
     };
+    let closed_variables = find_closed_variables(&body.clone(), env, &lambda_env)?;
     compile_many_exprs(body.clone(), &mut new_body_chunk, &mut lambda_env)?;
 
-    chunk
-        .code
-        .push(VMInstruction::Constant(Expr::LambdaDefinition(
-            new_body_chunk,
-            rest_arg.cloned(),
-            kws.to_vec(),
-        )));
-    chunk.code.push(VMInstruction::MakeLambda);
+    chunk.code.push(VMInstruction::MakeLambda(
+        new_body_chunk,
+        rest_arg.cloned(),
+        kws.to_vec(),
+        locals,
+        closed_variables,
+    ));
     Ok(())
 }
 
@@ -460,7 +537,7 @@ fn make_or(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResu
     Ok(())
 }
 
-fn make_quote(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
+fn make_quote(expr: &Expr, chunk: &mut Chunk, _env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
     if let (Some(arg), 1) = (exprs.first(), exprs.len()) {
         chunk.code.push(VMInstruction::Constant(arg.clone()))
@@ -474,10 +551,10 @@ fn make_display(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compil
         Expr::Pair(box displayee, box Expr::Nil, ..) => {
             compile_internal(displayee, chunk, env)?;
             chunk.code.push(VMInstruction::Display);
-            return Ok(());
+            Ok(())
         }
         otherwise => {
-            return comp_err!(
+            comp_err!(
                 expr,
                 "Expected one argument for display, but found {}",
                 otherwise
@@ -487,7 +564,7 @@ fn make_display(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> Compil
 }
 fn make_apply(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     let exprs = collect_exprs_from_body(expr)?;
-    if let (Some(function), Some(args), 2) = (exprs.get(0), exprs.get(1), exprs.len()) {
+    if let (Some(function), Some(args), 2) = (exprs.first(), exprs.get(1), exprs.len()) {
         compile_internal(function, chunk, env)?;
         compile_internal(args, chunk, env)?;
         chunk.code.push(VMInstruction::Apply);
@@ -516,7 +593,7 @@ pub static SPECIAL_FORMS: Lazy<HashMap<String, CompileFn>> = Lazy::new(|| {
 
 pub fn compile_internal(expr: &Expr, chunk: &mut Chunk, env: &mut Vec<String>) -> CompileResult {
     match &expr {
-        expr @ Expr::LambdaDefinition(..) | expr @ Expr::Lambda(..) => {
+        expr @ Expr::Lambda(..) => {
             panic!("Cannot compile a {}", expr)
         }
         Expr::Pair(box Expr::Keyword(kw, ..), box r, ..)
@@ -581,10 +658,10 @@ fn get_kw_from_define(expr: &Expr) -> Option<String> {
             box Expr::Pair(box Expr::Keyword(kw, ..), ..),
             ..,
         ) if define_kw == "define" => Some(kw.clone()),
-        _ => return None,
+        _ => None,
     }
 }
-fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {
+pub fn get_all_defines(exprs: &Vec<Expr>) -> Vec<String> {
     exprs.iter().filter_map(get_kw_from_define).collect()
 }
 

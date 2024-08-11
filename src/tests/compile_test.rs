@@ -2,9 +2,21 @@
 use std::assert_matches::assert_matches;
 
 #[cfg(test)]
+use crate::comp_err;
+#[cfg(test)]
+use crate::compile::collect_exprs_from_body;
+#[cfg(test)]
+use crate::compile::collect_kws_from_expr;
+#[cfg(test)]
 use crate::compile::compile_internal;
 #[cfg(test)]
+use crate::compile::find_closed_variables;
+#[cfg(test)]
+use crate::compile::get_all_defines;
+#[cfg(test)]
 use crate::compile::{compile_many_exprs, CompileError};
+#[cfg(test)]
+use crate::parse::SrcLoc;
 #[cfg(test)]
 use crate::{
     expr::Expr,
@@ -78,7 +90,12 @@ fn losta_compile() {
             },
             None
         )
-        .map(|x| x.0.callframes.get(0).map(|x| x.chunk.code.clone()).unwrap()),
+        .map(|x| x
+            .0
+            .callframes
+            .first()
+            .map(|x| x.chunk.code.clone())
+            .unwrap()),
         Ok(vec![
             VMInstruction::Lookup("+".to_string()),
             VMInstruction::Constant(Expr::num(1.0)),
@@ -132,7 +149,7 @@ fn losta_compile() {
     assert_eq!(
         parse_and_compile("((lambda () 1))"),
         vec![
-            VMInstruction::Constant(Expr::LambdaDefinition(
+            VMInstruction::MakeLambda(
                 Chunk {
                     code: vec![
                         VMInstruction::Constant(Expr::num(1.0)),
@@ -141,8 +158,9 @@ fn losta_compile() {
                 },
                 None,
                 vec![],
-            )),
-            VMInstruction::MakeLambda,
+                vec![],
+                vec![],
+            ),
             VMInstruction::Call(0)
         ]
     );
@@ -200,7 +218,7 @@ fn compile_recursive() {
         Err(CompileError {
             message,
             ..
-        }) if message == "xz is not defined".to_string()
+        }) if message == *"xz is not defined"
     );
     assert_matches!(
         parse_and_compile(
@@ -251,19 +269,18 @@ fn lambda_compile_test() {
     assert_eq!(
         parse_and_compile("(lambda () 1)"),
         Chunk {
-            code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
-                    Chunk {
-                        code: vec![
-                            VMInstruction::Constant(Expr::num(1.0)),
-                            VMInstruction::Return
-                        ],
-                    },
-                    None,
-                    vec![],
-                )),
-                VMInstruction::MakeLambda
-            ],
+            code: vec![VMInstruction::MakeLambda(
+                Chunk {
+                    code: vec![
+                        VMInstruction::Constant(Expr::num(1.0)),
+                        VMInstruction::Return
+                    ],
+                },
+                None,
+                vec![],
+                vec![],
+                vec![],
+            )],
         }
     );
 
@@ -271,7 +288,7 @@ fn lambda_compile_test() {
         parse_and_compile("((lambda () 1))"),
         Chunk {
             code: vec![
-                VMInstruction::Constant(Expr::LambdaDefinition(
+                VMInstruction::MakeLambda(
                     Chunk {
                         code: vec![
                             VMInstruction::Constant(Expr::num(1.0)),
@@ -280,10 +297,214 @@ fn lambda_compile_test() {
                     },
                     None,
                     vec![],
-                )),
-                VMInstruction::MakeLambda,
+                    vec![],
+                    vec![],
+                ),
                 VMInstruction::Call(0)
             ],
         }
+    );
+}
+
+#[test]
+fn local_vars_test() {
+    fn parse_and_close(input: &str) -> Result<Vec<String>, CompileError> {
+        let parsed = crate::parse::parse(&crate::parse::ParseInput {
+            source: input,
+            file_name: Some("lambda_compile_test"),
+        })
+        .map_err(|err| CompileError {
+            srcloc: None,
+            message: err,
+        })?;
+
+        Ok(get_all_defines(&parsed))
+    }
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(define c 12)
+(define (f q z) 12)
+(define b 30)
+(define q)
+(define (g) 12)
+",
+        ),
+        Ok(vec!["a", "c", "f", "b", "q", "g"]
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect())
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(lambda (x) ; lambda closing over a
+  (define m 1)
+  (define (g y) ; lambda closing over a, b, x
+    (+ a b x y)))
+(define b 30)
+",
+        ),
+        Ok(vec!["a", "b"].into_iter().map(|x| x.to_string()).collect())
+    );
+}
+#[test]
+fn close_variables_test() {
+    pub fn find_closed_vars_in_fn(
+        parent_scope: &Vec<String>,
+        fn_args: &Expr,
+        fn_body: &Expr,
+    ) -> Result<Vec<String>, CompileError> {
+        let body = collect_exprs_from_body(fn_body)?;
+
+        let lambda_args = collect_kws_from_expr(fn_args)?;
+        let locals = get_all_defines(&body);
+        let child_scope = [lambda_args, locals].concat();
+
+        let lambda_parent = parent_scope
+            .clone()
+            .into_iter()
+            .filter(|x| !child_scope.contains(x))
+            .collect::<Vec<String>>();
+
+        // remove the globals that exist as args
+
+        find_closed_variables(&body, &lambda_parent, &child_scope)
+    }
+
+    fn parse_and_close(input: &str) -> Result<Vec<String>, CompileError> {
+        let parsed = crate::parse::parse(&crate::parse::ParseInput {
+            source: input,
+            file_name: Some("close_test"),
+        })
+        .map_err(|err| CompileError {
+            srcloc: None,
+            message: err,
+        })?;
+
+        let parent_variables = get_all_defines(&parsed);
+        match parsed.last() {
+            Some(Expr::Pair(
+                box Expr::Keyword(lambda_kw, ..),
+                box Expr::Pair(kw_pairs, box lambda_body, ..),
+                ..,
+            )) if *lambda_kw == "lambda".to_string() => {
+                find_closed_vars_in_fn(&parent_variables, kw_pairs, lambda_body)
+            }
+            Some(Expr::Pair(
+                box Expr::Keyword(define_kw, ..),
+                box Expr::Pair(
+                    box Expr::Pair(box Expr::Keyword(_lambda_name, ..), kw_pairs, ..),
+                    box lambda_body,
+                    ..,
+                ),
+                ..,
+            )) if *define_kw == "define".to_string() => {
+                find_closed_vars_in_fn(&parent_variables, kw_pairs, lambda_body)
+            }
+            Some(last) => {
+                comp_err!(
+                    last,
+                    "expected lambda as last expr in test, but found this."
+                )
+            }
+            None => comp_err!(&Expr::Nil, "no expr compiled from: {input}"),
+        }
+    }
+
+    assert_eq!(
+        parse_and_close(
+            "
+(lambda (x) ())
+",
+        ),
+        Ok(vec![])
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(lambda (x) a)
+",
+        ),
+        Ok(vec!["a".to_string()])
+    );
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(define (f x) a)
+",
+        ),
+        Ok(vec!["a".to_string()])
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(lambda (x) (a x))
+",
+        ),
+        Ok(vec!["a".to_string()])
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(lambda (a) (+ a 1))
+",
+        ),
+        Ok(vec![])
+    );
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(define (f x) (a x))
+",
+        ),
+        Ok(vec!["a".to_string()])
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(lambda (x) ; lambda closing over a
+  (define b 1)
+  (define (g z) ; lambda def
+      z)  
+  (lambda (x y) ; lambda closing over a, b, x
+    (+ a b x (g y))))
+",
+        ),
+        Ok(vec!["a".to_string()])
+    );
+
+    assert_eq!(
+        parse_and_close(
+            "
+(define a 10)
+(define (f x) ; lambda closing over a
+  (define b 1)
+  (define (g y) ; lambda closing over a, b, x
+    (+ a b x y not_defined)))
+",
+        ),
+        Err(CompileError {
+            srcloc: Some(SrcLoc {
+                line: 6,
+                column: 16,
+                file_name: Some("close_test".to_string())
+            }),
+            message: "not_defined is not defined".to_string()
+        })
     );
 }
