@@ -81,6 +81,9 @@ fn gc_test() {
 
     fn find_envs(expr: &Expr, vec: &mut Vec<usize>) -> () {
         match expr {
+            Expr::Quote(box expr, ..) => {
+                find_envs(expr, vec);
+            }
             Expr::Pair(l, r, ..) => {
                 find_envs(l, vec);
                 find_envs(r, vec);

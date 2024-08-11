@@ -30,7 +30,7 @@ pub enum Expr {
         Vec<String>,
         Vec<String>,               /* locals */
         Option<String>,            /* variadic */
-        HashMap<String, HeapAddr>, /* env where it was defined*/
+        HashMap<String, HeapAddr>, /* closed variables */
     ),
     Nil,
 }
