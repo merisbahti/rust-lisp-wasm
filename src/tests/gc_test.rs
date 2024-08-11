@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[cfg(test)]
 use crate::{
     expr::Expr,
