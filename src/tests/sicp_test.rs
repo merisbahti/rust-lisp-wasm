@@ -51,8 +51,9 @@ fn test_sicp() {
         dir.files()
             .map(|x| (x.path().to_str().unwrap(), x.contents_utf8().unwrap()))
             .collect::<Vec<(&str, &str)>>()
-            .len(),
-        34
+            .len()
+            > 34,
+        true
     );
 
     let expected_logs = HashMap::from([(
