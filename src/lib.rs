@@ -4,9 +4,11 @@
 #![feature(if_let_guard)]
 #![feature(assert_matches)]
 
-mod app;
-use app::App;
+pub mod compile;
+pub mod expr;
+pub mod macro_expand;
+pub mod parse;
+pub mod vm;
 
-fn main() {
-    yew::Renderer::<App>::new().render();
-}
+#[cfg(test)]
+mod tests;
