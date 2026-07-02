@@ -370,7 +370,7 @@ fn test_parse_quote() {
     .unwrap()
     .unwrap();
 
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
     assert_matches!(res3,
         Expr::Pair(
             box Expr::Keyword(quote, ..),
@@ -437,7 +437,7 @@ fn test_parse_comment() {
 }
 #[test]
 fn test_parse_lists() {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
     fn ok_list(strings: Vec<&str>) -> Result<Vec<Expr>, String> {
         let stuff: Vec<Expr> = strings
             .iter()

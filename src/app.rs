@@ -1,10 +1,10 @@
-use crate::expr::Expr;
-use crate::vm;
-use crate::vm::get_prelude;
-use crate::vm::prepare_vm;
-use crate::vm::run;
-use crate::vm::Callframe;
-use crate::vm::VM;
+use rispy::expr::Expr;
+use rispy::vm;
+use rispy::vm::get_prelude;
+use rispy::vm::prepare_vm;
+use rispy::vm::run;
+use rispy::vm::Callframe;
+use rispy::vm::VM;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::UnwrapThrowExt;
@@ -86,7 +86,7 @@ pub fn app() -> Html {
     fn prepare_with_prelude(src: &str) -> Result<VM, String> {
         match get_prelude() {
             Ok(prelude) => prepare_vm(
-                &crate::parse::ParseInput {
+                &rispy::parse::ParseInput {
                     source: src,
                     file_name: Some("app"),
                 },

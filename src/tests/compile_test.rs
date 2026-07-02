@@ -1,5 +1,5 @@
 #[cfg(test)]
-use std::assert_matches::assert_matches;
+use std::assert_matches;
 
 #[cfg(test)]
 use crate::comp_err;
